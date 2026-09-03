@@ -30,6 +30,7 @@ from sentry_atm.domain import (
 )
 from sentry_atm.domain.time_policy import to_utc
 from sentry_atm.scenario import (
+    EmergencyDeclaredPayload,
     EntryConformanceDeviationPayload,
     ScenarioDefinition,
     ScenarioEvent,
@@ -66,6 +67,7 @@ class GoldenDemoSessionStage(StrEnum):
     MODIFICATION_REVALIDATED = "MODIFICATION_REVALIDATED"
     DECISION_REJECTED = "DECISION_REJECTED"
     CONFLICT_RESOLVED = "CONFLICT_RESOLVED"
+    EMERGENCY_DECLARED = "EMERGENCY_DECLARED"
 
 
 class GoldenDemoSessionCommand(StrEnum):
@@ -80,6 +82,7 @@ class GoldenDemoSessionCommand(StrEnum):
     APPLY_VALIDATED_MODIFIED_MANEUVER = "APPLY_VALIDATED_MODIFIED_MANEUVER"
     REJECT_RECOMMENDATION = "REJECT_RECOMMENDATION"
     APPLY_APPROVED_MANEUVER = "APPLY_APPROVED_MANEUVER"
+    ADVANCE_TO_EMERGENCY = "ADVANCE_TO_EMERGENCY"
     RESET = "RESET"
 
 
@@ -260,6 +263,40 @@ class GoldenDemoDeviationReadModel:
 
 
 @dataclass(frozen=True, slots=True)
+class GoldenDemoEmergencyReadModel:
+    """Declared emergency joined with its independent operational priority evidence."""
+
+    event_id: str
+    declared_at_utc: str
+    aircraft_id: str
+    emergency_type: str
+    reason_category: str
+    priority_assessment_id: str
+    priority_level: str
+    priority_score: float
+    reason_codes: tuple[str, ...]
+    source_event_ids: tuple[str, ...]
+    queue_exception_id: str | None
+    queue_rank: int | None
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "event_id": self.event_id,
+            "declared_at_utc": self.declared_at_utc,
+            "aircraft_id": self.aircraft_id,
+            "emergency_type": self.emergency_type,
+            "reason_category": self.reason_category,
+            "priority_assessment_id": self.priority_assessment_id,
+            "priority_level": self.priority_level,
+            "priority_score": self.priority_score,
+            "reason_codes": list(self.reason_codes),
+            "source_event_ids": list(self.source_event_ids),
+            "queue_exception_id": self.queue_exception_id,
+            "queue_rank": self.queue_rank,
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class GoldenDemoCandidateComparisonReadModel:
     """One candidate joined with its isolated Safety Validation evidence."""
 
@@ -372,6 +409,7 @@ class GoldenDemoSessionReadModel:
     application_step_id: str | None
     primary_conflict: GoldenDemoConflictEvidenceReadModel | None
     deviation: GoldenDemoDeviationReadModel | None
+    emergency: GoldenDemoEmergencyReadModel | None
     candidate_comparisons: tuple[GoldenDemoCandidateComparisonReadModel, ...]
     exception_queue: ExceptionQueueSnapshotReadModel | None
     recommendation: ResolutionRecommendationSetReadModel | None
@@ -398,6 +436,7 @@ class GoldenDemoSessionReadModel:
                 self.primary_conflict.to_dict() if self.primary_conflict is not None else None
             ),
             "deviation": self.deviation.to_dict() if self.deviation is not None else None,
+            "emergency": self.emergency.to_dict() if self.emergency is not None else None,
             "candidate_comparisons": [
                 item.to_dict() for item in self.candidate_comparisons
             ],
@@ -541,14 +580,10 @@ class InProcessGoldenDemoSessionApi:
         runtime = steps.runtime
         clock = runtime.simulation.clock
 
-        traffic_snapshot = (
-            application_result.traffic_snapshot
-            if application_result is not None
-            else (
-                step_result.traffic_snapshot
-                if step_result is not None
-                else runtime.simulation.engine.snapshot()
-            )
+        traffic_snapshot = _latest_traffic_snapshot(
+            application_result=application_result,
+            step_result=step_result,
+            fallback=runtime.simulation.engine.snapshot(),
         )
         queue = runtime.exception_queue_api.get_current(include_resolved=True)
         recommendation = runtime.recommendation_api.get_current()
@@ -587,6 +622,11 @@ class InProcessGoldenDemoSessionApi:
                 step_result=step_result,
                 scenario_events=runtime.simulation.timeline.events,
             ),
+            emergency=_map_emergency(
+                step_result=step_result,
+                scenario_events=runtime.simulation.timeline.events,
+                queue=queue,
+            ),
             candidate_comparisons=_map_candidate_comparisons(resolution_result),
             exception_queue=queue,
             recommendation=recommendation,
@@ -610,6 +650,11 @@ def _stage(
     modified_revalidation_result,
     application_result,
 ) -> GoldenDemoSessionStage:
+    if step_result is not None and any(
+        item.priority_level is OperationalPriorityLevel.EMERGENCY
+        for item in step_result.priority_assessments
+    ):
+        return GoldenDemoSessionStage.EMERGENCY_DECLARED
     if application_result is not None:
         return GoldenDemoSessionStage.CONFLICT_RESOLVED
     if modified_revalidation_result is not None:
@@ -636,6 +681,19 @@ def _stage(
     ):
         return GoldenDemoSessionStage.DEVIATION_DETECTED
     return GoldenDemoSessionStage.MONITORING
+
+
+def _latest_traffic_snapshot(*, application_result, step_result, fallback):
+    if application_result is None:
+        return step_result.traffic_snapshot if step_result is not None else fallback
+    if step_result is None:
+        return application_result.traffic_snapshot
+    if (
+        step_result.traffic_snapshot.timestamp_utc
+        > application_result.traffic_snapshot.timestamp_utc
+    ):
+        return step_result.traffic_snapshot
+    return application_result.traffic_snapshot
 
 
 def _map_traffic(
@@ -707,6 +765,61 @@ def _map_deviation(
         ),
         lateral_deviation_nm=payload.lateral_deviation_nm,
         time_deviation_seconds=payload.time_deviation_seconds,
+    )
+
+
+def _map_emergency(
+    *,
+    step_result,
+    scenario_events: tuple[ScenarioEvent, ...],
+    queue: ExceptionQueueSnapshotReadModel | None,
+) -> GoldenDemoEmergencyReadModel | None:
+    if step_result is None:
+        return None
+    event = next(
+        (
+            item
+            for item in scenario_events
+            if item.event_type is ScenarioEventType.EMERGENCY_DECLARED
+            and item.scheduled_time_utc <= step_result.timestamp_utc
+        ),
+        None,
+    )
+    if event is None or not isinstance(event.payload, EmergencyDeclaredPayload):
+        return None
+    assessment = next(
+        (
+            item
+            for item in step_result.priority_assessments
+            if item.aircraft_id == event.target_aircraft_id
+            and item.priority_level is OperationalPriorityLevel.EMERGENCY
+        ),
+        None,
+    )
+    if assessment is None:
+        return None
+    queue_item = None
+    queue_rank = None
+    if queue is not None:
+        for rank, item in enumerate(queue.items, start=1):
+            if item.subject_aircraft_ids == (event.target_aircraft_id,):
+                queue_item = item
+                queue_rank = rank
+                break
+    payload = event.payload
+    return GoldenDemoEmergencyReadModel(
+        event_id=event.event_id,
+        declared_at_utc=_utc_text(event.scheduled_time_utc),
+        aircraft_id=event.target_aircraft_id,
+        emergency_type=payload.emergency_type.value,
+        reason_category=payload.reason_category.value,
+        priority_assessment_id=assessment.priority_assessment_id,
+        priority_level=assessment.priority_level.value,
+        priority_score=assessment.priority_score,
+        reason_codes=tuple(item.value for item in assessment.reason_codes),
+        source_event_ids=assessment.source_event_ids,
+        queue_exception_id=queue_item.exception_id if queue_item is not None else None,
+        queue_rank=queue_rank,
     )
 
 

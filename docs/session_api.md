@@ -10,15 +10,16 @@ Application을 실행하지 않는다.
 
 `GoldenDemoSessionStage`는 완료된 증거를 다음 우선순위로 평가한다.
 
-1. Application Result 존재 → `CONFLICT_RESOLVED`
-2. Modified Maneuver Revalidation Result 존재 → `MODIFICATION_REVALIDATED`
-3. Controller Decision Result 존재 → Decision Type에 따라 `DECISION_ACCEPTED`,
+1. 최신 Step에 EMERGENCY Priority 존재 → `EMERGENCY_DECLARED`
+2. Application Result 존재 → `CONFLICT_RESOLVED`
+3. Modified Maneuver Revalidation Result 존재 → `MODIFICATION_REVALIDATED`
+4. Controller Decision Result 존재 → Decision Type에 따라 `DECISION_ACCEPTED`,
    `DECISION_MODIFIED`, `DECISION_REJECTED`
-4. Resolution Result 존재 → `RECOMMENDATION_AVAILABLE`
-5. 최신 Step에 HIGH/CRITICAL Risk 존재 → `CONFLICT_DETECTED`
-6. 최신 Step에 ROUTINE이 아닌 Priority 존재 → `DEVIATION_DETECTED`
-7. Step 존재 → `MONITORING`
-8. Step 없음 → `READY`
+5. Resolution Result 존재 → `RECOMMENDATION_AVAILABLE`
+6. 최신 Step에 HIGH/CRITICAL Risk 존재 → `CONFLICT_DETECTED`
+7. 최신 Step에 ROUTINE이 아닌 Priority 존재 → `DEVIATION_DETECTED`
+8. Step 존재 → `MONITORING`
+9. Step 없음 → `READY`
 
 단계는 별도로 수정하거나 저장하지 않으므로 실제 backend evidence보다 앞선 화면 상태를 만들 수 없다.
 
@@ -35,6 +36,7 @@ Application을 실행하지 않는다.
 - 수정 기동의 격리 Safety Validation 판정, CPA/TCPA, 2차 충돌·성능·규칙 증거와 적용 Gate
 - HIGH/CRITICAL 원 충돌의 항공기쌍, CPA/TCPA, 분리기준 대비 비율, Risk Score/Reason/Profile 증거
 - T+60 진입 이벤트의 계획·실제 고도/침로 및 수평·수직·시간 편차
+- T+240 비상 선언과 독립된 Operational Priority, Source Event 및 Exception Queue 순위
 - CAND-A~E 전체의 기동, 비용, 원 충돌 결과, 2차 충돌, 규칙 위반과 검증 판정
 - 적용 전후 고도, Post-apply Prediction/Conflict Run과 원 Conflict의 SAFE/LOW/RESOLVED 요약
 
@@ -62,6 +64,7 @@ Revalidation은 비어 있다.
 | `APPLY_VALIDATED_MODIFIED_MANEUVER` | SAFE `MODIFICATION_REVALIDATED`, T+90 | `CONFLICT_RESOLVED`, T+90 |
 | `REJECT_RECOMMENDATION` | `RECOMMENDATION_AVAILABLE`, T+75 | `DECISION_REJECTED`, T+90 |
 | `APPLY_APPROVED_MANEUVER` | `DECISION_ACCEPTED`, T+90 | `CONFLICT_RESOLVED`, T+90 |
+| `ADVANCE_TO_EMERGENCY` | `CONFLICT_RESOLVED`, T+90 | `EMERGENCY_DECLARED`, T+240 |
 | `RESET` | 모든 Stage | 새 `READY`, T+0 Run |
 
 서비스는 caller가 임의 `advance_steps`를 전달하게 하지 않는다. `MODIFY`는 Rationale과 원 추천과 다른

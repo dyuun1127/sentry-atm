@@ -20,6 +20,7 @@ def test_real_loopback_regression_verifies_complete_golden_demo() -> None:
         "RECOMMENDATION",
         "DECISION",
         "REVALIDATION",
+        "EMERGENCY",
         "RESET",
         "MODIFY_SAFE",
         "MODIFY_BLOCKED",
@@ -32,12 +33,16 @@ def test_real_loopback_regression_verifies_complete_golden_demo() -> None:
         "RECOMMENDATION_AVAILABLE",
         "DECISION_ACCEPTED",
         "CONFLICT_RESOLVED",
+        "EMERGENCY_DECLARED",
         "READY",
         "CONFLICT_RESOLVED",
         "MODIFICATION_REVALIDATED",
         "DECISION_REJECTED",
     )
     assert report.checkpoints[5].detail == "applied 9,000 ft | SAFE / LOW / RESOLVED"
+    assert report.checkpoints[6].detail == (
+        "MIL-T01 | operational priority 100 | queue rank 1"
+    )
     assert report.checkpoints[-3].detail.startswith("8,800 ft | isolated SAFE")
     assert "HTTP 409" in report.checkpoints[-2].detail
     assert report.checkpoints[-1].detail == "REJECT audited | no validation or application"

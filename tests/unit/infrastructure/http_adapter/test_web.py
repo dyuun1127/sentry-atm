@@ -67,6 +67,8 @@ def test_root_serves_accessible_ui_shell_with_security_headers() -> None:
     assert b'data-playback-rate="2"' in body
     assert b'data-playback-rate="4"' in body
     assert b"data-deviation-panel" in body
+    assert b"data-emergency-panel" in body
+    assert b'data-stage-key="EMERGENCY_DECLARED"' in body
     assert b"data-candidate-panel" in body
     assert b"data-decision-actions" in body
     assert b"data-decision-form" in body
@@ -115,6 +117,7 @@ def test_ui_assets_include_every_fixed_session_command_and_busy_boundary() -> No
         b'command: "REVALIDATE_MODIFIED_MANEUVER"',
         b'command: "APPLY_VALIDATED_MODIFIED_MANEUVER"',
         b'command: "APPLY_APPROVED_MANEUVER"',
+        b'command: "ADVANCE_TO_EMERGENCY"',
         b'command: "RESET"',
     ):
         assert command in script
@@ -123,6 +126,8 @@ def test_ui_assets_include_every_fixed_session_command_and_busy_boundary() -> No
     assert b"function renderConflictExplainability(session)" in script
     assert b"session.primary_conflict" in script
     assert b"function renderDeviation(deviation)" in script
+    assert b"function renderEmergency(emergency)" in script
+    assert b'emergencyAircraftId = currentSession?.emergency?.aircraft_id' in script
     assert b"function renderCandidateComparisons(candidates)" in script
     assert b'executeCommand("ACCEPT_RECOMMENDATION")' in script
     assert b'executeCommand("MODIFY_RECOMMENDATION"' in script
@@ -163,6 +168,7 @@ def test_ui_assets_control_rate_timeline_and_contract_driven_auto_pause() -> Non
     assert b"function advanceSessionForCue(cue)" in script
     assert b'command: "ADVANCE_TO_CONFLICT"' in script
     assert b'command: "GENERATE_RECOMMENDATION"' in script
+    assert b'command: "ADVANCE_TO_EMERGENCY"' in script
     assert b'playbackScrubber.addEventListener("input"' in script
     assert b"cue.auto_pause" in script
     assert b"activeCue?.requires_operator_action" in script

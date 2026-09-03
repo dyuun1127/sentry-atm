@@ -199,6 +199,43 @@ def run_golden_demo_regression(
             _checkpoint("REVALIDATION", resolved, "applied 9,000 ft | SAFE / LOW / RESOLVED")
         )
 
+        emergency = _post_command(connection, "ADVANCE_TO_EMERGENCY")
+        _require_session(
+            emergency,
+            expected_stage="EMERGENCY_DECLARED",
+            expected_elapsed=240.0,
+        )
+        emergency_evidence = _mapping(emergency, "emergency")
+        _require(
+            emergency_evidence.get("aircraft_id") == "MIL-T01",
+            "MIL-T01 emergency declaration is required",
+        )
+        _require(
+            emergency_evidence.get("priority_level") == "EMERGENCY"
+            and emergency_evidence.get("priority_score") == 100.0,
+            "emergency operational priority must be EMERGENCY / 100",
+        )
+        _require(
+            emergency_evidence.get("queue_rank") == 1,
+            "MIL-T01 emergency must rank first in the Exception Queue",
+        )
+        _require(
+            _mapping(emergency, "exception_queue").get("top_exception_id")
+            == "EXCEPTION-PRIORITY-MIL-T01",
+            "Exception Queue top item must be the MIL-T01 operational priority",
+        )
+        _require(
+            _aircraft(emergency, "MIL-T01").get("emergency_status") == "NONE",
+            "declaration must not mutate Aircraft Runtime before approval",
+        )
+        checkpoints.append(
+            _checkpoint(
+                "EMERGENCY",
+                emergency,
+                "MIL-T01 | operational priority 100 | queue rank 1",
+            )
+        )
+
         reset = _post_command(connection, "RESET")
         _require_session(reset, expected_stage="READY", expected_elapsed=0.0)
         _require(reset.get("run_number") == 1, "reset must increment the Run number")
@@ -613,6 +650,10 @@ def _primary_recommendation(payload: dict[str, object]) -> dict[str, object]:
 
 
 def _aircraft_altitude(payload: dict[str, object], aircraft_id: str) -> float:
+    return float(_number(_aircraft(payload, aircraft_id), "altitude_ft"))
+
+
+def _aircraft(payload: dict[str, object], aircraft_id: str) -> dict[str, object]:
     traffic = _list(payload, "traffic")
     match = next(
         (
@@ -624,7 +665,7 @@ def _aircraft_altitude(payload: dict[str, object], aircraft_id: str) -> float:
     )
     if match is None:
         raise GoldenDemoRegressionFailure(f"aircraft {aircraft_id} is missing")
-    return float(_number(match, "altitude_ft"))
+    return match
 
 
 def _mapping(payload: dict[str, object], key: str) -> dict[str, object]:

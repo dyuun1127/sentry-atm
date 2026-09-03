@@ -11,6 +11,7 @@ const STAGE_ORDER = [
   "RECOMMENDATION_AVAILABLE",
   "DECISION_ACCEPTED",
   "CONFLICT_RESOLVED",
+  "EMERGENCY_DECLARED",
 ];
 const COMMAND_BY_STAGE = {
   READY: { command: "START", code: "START · T+00", label: "감시 시작" },
@@ -55,9 +56,14 @@ const COMMAND_BY_STAGE = {
     label: "거절 기록 후 새 Run 시작",
   },
   CONFLICT_RESOLVED: {
-    command: "RESET",
-    code: "RESET · T+00",
-    label: "새 Run 시작",
+    command: "ADVANCE_TO_EMERGENCY",
+    code: "ADVANCE · T+240",
+    label: "비상 이벤트로 진행",
+  },
+  EMERGENCY_DECLARED: {
+    command: "",
+    code: "EMERGENCY · T+240",
+    label: "비상 복귀안 검토 필요",
   },
 };
 
@@ -83,6 +89,14 @@ const elements = {
   deviationHeading: document.querySelector("[data-deviation-heading]"),
   deviationLateral: document.querySelector("[data-deviation-lateral]"),
   deviationTime: document.querySelector("[data-deviation-time]"),
+  emergencyPanel: document.querySelector("[data-emergency-panel]"),
+  emergencyAircraft: document.querySelector("[data-emergency-aircraft]"),
+  emergencyLevel: document.querySelector("[data-emergency-level]"),
+  emergencyType: document.querySelector("[data-emergency-type]"),
+  emergencyScore: document.querySelector("[data-emergency-score]"),
+  emergencyRank: document.querySelector("[data-emergency-rank]"),
+  emergencyDeclaredAt: document.querySelector("[data-emergency-declared-at]"),
+  emergencyReasons: document.querySelector("[data-emergency-reasons]"),
   aircraftLayer: document.querySelector("[data-aircraft-layer]"),
   trailLayer: document.querySelector("[data-trail-layer]"),
   playbackOffset: document.querySelector("[data-playback-offset]"),
@@ -266,10 +280,12 @@ function renderAircraftMap(traffic) {
   elements.aircraftLayer.replaceChildren();
   elements.trailLayer.replaceChildren();
   const conflictIds = currentSession?.primary_conflict?.aircraft_ids ?? [];
+  const emergencyAircraftId = currentSession?.emergency?.aircraft_id;
   for (const aircraft of traffic) {
     const track = document.createElement("div");
     track.className = `aircraft-track${isMilitary(aircraft) ? " military" : ""}`;
     track.classList.toggle("conflict-focus", conflictIds.includes(aircraft.aircraft_id));
+    track.classList.toggle("emergency-focus", aircraft.aircraft_id === emergencyAircraftId);
     const position = mapPosition(aircraft);
     track.style.left = `${position.left}%`;
     track.style.top = `${position.top}%`;
@@ -490,6 +506,7 @@ function renderPlaybackFrame(offsetSeconds) {
     interpolateAircraft(aircraft, nextById.get(aircraft.aircraft_id) ?? aircraft, fraction),
   );
   const conflictIds = currentSession?.primary_conflict?.aircraft_ids ?? [];
+  const emergencyAircraftId = currentSession?.emergency?.aircraft_id;
 
   for (const aircraft of traffic) {
     const { track, symbol, detail } = ensureAnimatedTrack(aircraft);
@@ -497,6 +514,7 @@ function renderPlaybackFrame(offsetSeconds) {
     track.style.left = `${position.left}%`;
     track.style.top = `${position.top}%`;
     track.classList.toggle("conflict-focus", conflictIds.includes(aircraft.aircraft_id));
+    track.classList.toggle("emergency-focus", aircraft.aircraft_id === emergencyAircraftId);
     track.setAttribute(
       "aria-label",
       `${aircraft.aircraft_id}, ${formatNumber(aircraft.altitude_ft)} feet, ${formatNumber(
@@ -511,6 +529,10 @@ function renderPlaybackFrame(offsetSeconds) {
     animatedTrails.get(aircraft.aircraft_id).classList.toggle(
       "conflict-focus",
       conflictIds.includes(aircraft.aircraft_id),
+    );
+    animatedTrails.get(aircraft.aircraft_id).classList.toggle(
+      "emergency-focus",
+      aircraft.aircraft_id === emergencyAircraftId,
     );
   }
   renderConflictOverlay(traffic);
@@ -566,6 +588,10 @@ async function advanceSessionForCue(cue) {
     RECOMMENDATION_AVAILABLE: {
       command: "GENERATE_RECOMMENDATION",
       stage: "CONFLICT_DETECTED",
+    },
+    EMERGENCY_DECLARED: {
+      command: "ADVANCE_TO_EMERGENCY",
+      stage: "CONFLICT_RESOLVED",
     },
   };
   const transition = commandByCueType[cue.cue_type];
@@ -678,6 +704,28 @@ function renderDeviation(deviation) {
   elements.deviationTime.textContent = formatSignedNumber(deviation.time_deviation_seconds);
 }
 
+function renderEmergency(emergency) {
+  elements.emergencyPanel.hidden = !emergency;
+  if (!emergency) {
+    return;
+  }
+  elements.emergencyAircraft.textContent = emergency.aircraft_id ?? "—";
+  elements.emergencyLevel.textContent = emergency.priority_level ?? "EMERGENCY";
+  elements.emergencyType.textContent = String(
+    emergency.emergency_type ?? "PRIORITY_RETURN",
+  ).replaceAll("_", " ");
+  elements.emergencyScore.textContent = formatNumber(emergency.priority_score);
+  elements.emergencyRank.textContent = emergency.queue_rank
+    ? `#${String(emergency.queue_rank).padStart(2, "0")}`
+    : "—";
+  elements.emergencyDeclaredAt.textContent = formatSimulationTime(
+    emergency.declared_at_utc,
+  );
+  elements.emergencyReasons.textContent = (emergency.reason_codes ?? [])
+    .map((item) => String(item).replaceAll("_", " "))
+    .join(" · ") || "—";
+}
+
 function renderExceptionQueue(queue) {
   const items = Array.isArray(queue?.items)
     ? queue.items.filter((item) => item.status !== "RESOLVED")
@@ -689,6 +737,7 @@ function renderExceptionQueue(queue) {
   for (const item of items) {
     const card = document.createElement("article");
     card.className = "queue-item";
+    card.classList.toggle("is-emergency", item.severity === "EMERGENCY");
 
     const header = document.createElement("div");
     header.className = "queue-item-header";
@@ -1082,7 +1131,7 @@ function updateCommandControl(session) {
   elements.commandCode.textContent = config?.code ?? "NO AUTHORIZED COMMAND";
   elements.commandLabel.textContent = config?.label ?? "현재 단계 확인 필요";
   elements.resetCommand.hidden = stage === "READY" || config?.command === "RESET";
-  elements.primaryCommand.disabled = requestBusy || !config;
+  elements.primaryCommand.disabled = requestBusy || !config?.command;
   elements.resetCommand.disabled = requestBusy;
 }
 
@@ -1139,6 +1188,7 @@ function renderSession(session) {
   }
   renderTrafficTable(traffic);
   renderDeviation(session.deviation);
+  renderEmergency(session.emergency);
   renderStage(String(session.stage ?? "READY"));
   renderExceptionQueue(session.exception_queue);
   renderDecisionSupport(session);

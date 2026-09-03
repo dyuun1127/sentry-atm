@@ -127,6 +127,23 @@
         </div>
       </section>
 
+      <section class="emergency-panel" data-emergency-panel hidden aria-labelledby="emergency-title">
+        <header>
+          <div>
+            <p class="eyebrow">OPERATIONAL PRIORITY · INDEPENDENT FROM CONFLICT RISK</p>
+            <h2 id="emergency-title"><span data-emergency-aircraft>—</span> Priority Return</h2>
+          </div>
+          <strong class="emergency-badge" data-emergency-level>EMERGENCY</strong>
+        </header>
+        <div class="emergency-grid">
+          <article><span>TYPE</span><strong data-emergency-type>—</strong><small>SYNTHETIC EVENT</small></article>
+          <article><span>PRIORITY SCORE</span><strong><b data-emergency-score>—</b> / 100</strong><small>OPERATIONAL PRIORITY</small></article>
+          <article><span>QUEUE RANK</span><strong data-emergency-rank>—</strong><small>MANAGEMENT BY EXCEPTION</small></article>
+          <article><span>DECLARED UTC</span><strong data-emergency-declared-at>—</strong><small>T+240 CHECKPOINT</small></article>
+          <article><span>WHY PRIORITIZED</span><strong data-emergency-reasons>—</strong><small>RISK SCORE IS EVALUATED SEPARATELY</small></article>
+        </div>
+      </section>
+
       <section class="conflict-explainability" data-conflict-explainability hidden aria-labelledby="conflict-explainability-title">
         <header class="explainability-header">
           <div>
@@ -450,6 +467,7 @@
           <li data-stage-key="RECOMMENDATION_AVAILABLE"><span>03</span><div><strong>Recommend</strong><small>T+75</small></div></li>
           <li data-stage-key="DECISION_ACCEPTED"><span>04</span><div><strong>Decision</strong><small>T+90</small></div></li>
           <li data-stage-key="CONFLICT_RESOLVED"><span>05</span><div><strong>Resolved</strong><small>T+90</small></div></li>
+          <li data-stage-key="EMERGENCY_DECLARED"><span>06</span><div><strong>Emergency</strong><small>T+240</small></div></li>
         </ol>
         <div class="timeline-action">
           <span>NEXT AUTHORIZED ACTION</span>

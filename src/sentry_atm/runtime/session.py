@@ -205,6 +205,13 @@ class GoldenDemoSessionCommandService:
                 elapsed_seconds=90.0,
             )
             self._application_orchestrator.apply_and_revalidate()
+        elif selected is GoldenDemoSessionCommand.ADVANCE_TO_EMERGENCY:
+            _require_checkpoint(
+                current,
+                GoldenDemoSessionStage.CONFLICT_RESOLVED,
+                elapsed_seconds=90.0,
+            )
+            steps.step(150)
         else:  # pragma: no cover - exhaustive StrEnum dispatch
             raise AssertionError(f"unsupported Session command: {selected.value}")
         return self._read_api.get_current()

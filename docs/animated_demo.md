@@ -60,6 +60,7 @@ JSON-ready 구조로 제공한다.
 - Phase 17-B: 결정론적 1초 Aircraft Frame 생성 및 Read API — 구현 완료
 - Phase 17-C: Radar Marker/Trail의 연속 브라우저 애니메이션 — 구현 완료
 - Phase 17-D: PLAY/PAUSE, 배속, Timeline, 자동 일시정지 제어 — 구현 완료
+- Phase 18-A: T+240 Emergency Session·Queue·Radar 동기화 — 구현 완료
 
 Phase 17-C에서 Radar 애니메이션이 연결되었고 Phase 17-D에서 전체 조작 계약이 완성되었다.
 
@@ -99,5 +100,6 @@ PLAY/PAUSE, 1x·2x·4x 배속, T+0~T+300 Scrubber와 Cue Marker를 구성한다.
 재생이 `auto_pause=true` Cue를 통과하면 반드시 Cue의 정확한 시각을 먼저 렌더링한 후 정지한다.
 T+70과 T+75는 각각 기존 `ADVANCE_TO_CONFLICT`, `GENERATE_RECOMMENDATION` 명령과 자동 연결되어
 화면의 Conflict/Recommendation Evidence도 같은 시각으로 갱신된다. T+75의 관제사 결정 지점에서는
-Accept/Modify/Reject가 완료되기 전 PLAY를 비활성화한다. T+240과 T+260은 현재 Playback Frame과
-Cue 설명을 정확히 정지해 보여주며, 후속 비상운영 Domain 단계에서 전용 관제사 흐름과 연결한다.
+Accept/Modify/Reject가 완료되기 전 PLAY를 비활성화한다. T+240은 Phase 18-A의
+`ADVANCE_TO_EMERGENCY`와 자동 연결되어 비상 Priority와 Queue를 갱신한다. T+260은 현재 Playback
+Frame과 Cue 설명을 정확히 정지해 보여주며, 후속 비상 복귀 흐름에서 Session과 연결한다.

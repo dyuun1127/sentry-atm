@@ -64,6 +64,7 @@ def test_ready_session_is_complete_json_ready_and_read_only() -> None:
     assert current.application_step_id is None
     assert current.primary_conflict is None
     assert current.deviation is None
+    assert current.emergency is None
     assert current.candidate_comparisons == ()
     assert current.exception_queue is None
     assert current.recommendation is None
@@ -208,6 +209,33 @@ def test_session_projects_each_completed_backend_stage() -> None:
     assert json.loads(json.dumps(payload))["controller_decision"]["revision"] == 1
     assert conflict_step.traffic_snapshot != application_result.traffic_snapshot
 
+    emergency_step = steps.step(150)
+    emergency = api.get_current()
+    assert emergency.stage is GoldenDemoSessionStage.EMERGENCY_DECLARED
+    assert emergency.elapsed_seconds == 240.0
+    assert emergency.step_id == "GOLDEN-STEP-000000000240"
+    assert emergency.emergency is not None
+    assert emergency.emergency.event_id == "EVT-MIL-T01-EMERGENCY"
+    assert emergency.emergency.aircraft_id == "MIL-T01"
+    assert emergency.emergency.emergency_type == "PRIORITY_RETURN"
+    assert emergency.emergency.reason_category == "AIRCRAFT_CONDITION"
+    assert emergency.emergency.priority_level == "EMERGENCY"
+    assert emergency.emergency.priority_score == 100.0
+    assert emergency.emergency.queue_exception_id == "EXCEPTION-PRIORITY-MIL-T01"
+    assert emergency.emergency.queue_rank == 1
+    assert emergency.exception_queue is not None
+    assert emergency.exception_queue.top_exception_id == "EXCEPTION-PRIORITY-MIL-T01"
+    assert emergency.revalidation == resolved.revalidation
+    assert next(
+        item for item in emergency.traffic if item.aircraft_id == "MIL-T01"
+    ).timestamp_utc == emergency_step.traffic_snapshot.timestamp_utc.isoformat(
+        timespec="microseconds"
+    ).replace("+00:00", "Z")
+    assert next(
+        item for item in emergency.traffic if item.aircraft_id == "MIL-T01"
+    ).emergency_status == "NONE"
+    assert emergency.to_dict()["emergency"] == emergency.emergency.to_dict()
+
 
 def test_deviation_stage_is_distinct_from_conflict_and_monitoring() -> None:
     runtime, steps, _, _, _, _, _ = _session()
@@ -249,6 +277,7 @@ def test_reset_returns_a_new_empty_session_run_with_initial_traffic() -> None:
     assert current.controller_decision is None
     assert current.primary_conflict is None
     assert current.deviation is None
+    assert current.emergency is None
     assert current.candidate_comparisons == ()
     assert current.revalidation is None
     assert next(item for item in current.traffic if item.aircraft_id == "MIL-F01").altitude_ft == (

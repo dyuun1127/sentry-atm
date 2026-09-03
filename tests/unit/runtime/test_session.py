@@ -288,6 +288,37 @@ def test_out_of_order_and_duplicate_commands_are_rejected_without_state_change()
     rejected(GoldenDemoSessionCommand.APPLY_APPROVED_MANEUVER, "DECISION_ACCEPTED")
 
 
+def test_resolved_session_advances_to_emergency_checkpoint_without_applying_runtime() -> None:
+    session = build_golden_demo_session_runtime()
+    for command in _FULL_SEQUENCE:
+        resolved = session.command_service.execute(command)
+    before = next(
+        item for item in resolved.traffic if item.aircraft_id == "MIL-T01"
+    )
+
+    emergency = session.command_service.execute(
+        GoldenDemoSessionCommand.ADVANCE_TO_EMERGENCY
+    )
+
+    assert emergency.stage is GoldenDemoSessionStage.EMERGENCY_DECLARED
+    assert emergency.elapsed_seconds == 240.0
+    assert emergency.emergency is not None
+    assert emergency.emergency.aircraft_id == "MIL-T01"
+    assert emergency.emergency.priority_score == 100.0
+    assert emergency.emergency.queue_rank == 1
+    current = next(
+        item for item in emergency.traffic if item.aircraft_id == "MIL-T01"
+    )
+    assert current.emergency_status == "NONE"
+    assert current.emergency_type is None
+    assert current.timestamp_utc != before.timestamp_utc
+
+    unchanged = session.read_api.get_current()
+    with pytest.raises(ValueError, match="CONFLICT_RESOLVED"):
+        session.command_service.execute(GoldenDemoSessionCommand.ADVANCE_TO_EMERGENCY)
+    assert session.read_api.get_current() == unchanged
+
+
 def test_command_rejects_clock_drift_before_advancing_checkpoint() -> None:
     session = build_golden_demo_session_runtime()
     session.command_service.execute(GoldenDemoSessionCommand.START)
