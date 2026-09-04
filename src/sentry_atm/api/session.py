@@ -17,9 +17,11 @@ from sentry_atm.domain import (
     ConflictRiskAssessment,
     ConflictStatus,
     ControllerDecisionType,
+    EmergencyReturnCandidateBatch,
     EntryDelayManeuver,
     ExceptionStatus,
     HeadingManeuver,
+    OperationalPriorityExceptionItem,
     OperationalPriorityLevel,
     ResolutionCandidate,
     ResolutionManeuver,
@@ -297,6 +299,78 @@ class GoldenDemoEmergencyReadModel:
 
 
 @dataclass(frozen=True, slots=True)
+class GoldenDemoEmergencyReturnActionReadModel:
+    """JSON-ready action in one unvalidated emergency-return plan."""
+
+    aircraft_id: str
+    maneuver_type: str
+    target_ground_speed_kt: float | None
+    delay_seconds: float | None
+    target_sequence_position: int | None
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "aircraft_id": self.aircraft_id,
+            "maneuver_type": self.maneuver_type,
+            "target_ground_speed_kt": self.target_ground_speed_kt,
+            "delay_seconds": self.delay_seconds,
+            "target_sequence_position": self.target_sequence_position,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class GoldenDemoEmergencyReturnCandidateReadModel:
+    """One coordinated alternative with no implied Safety verdict."""
+
+    candidate_id: str
+    strategy: str
+    arrival_sequence: tuple[str, ...]
+    actions: tuple[GoldenDemoEmergencyReturnActionReadModel, ...]
+    preserves_stabilized_arrival: bool
+    estimated_delay_seconds: float
+    operational_cost_score: float
+    baseline: bool
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "candidate_id": self.candidate_id,
+            "strategy": self.strategy,
+            "arrival_sequence": list(self.arrival_sequence),
+            "actions": [item.to_dict() for item in self.actions],
+            "preserves_stabilized_arrival": self.preserves_stabilized_arrival,
+            "estimated_delay_seconds": self.estimated_delay_seconds,
+            "operational_cost_score": self.operational_cost_score,
+            "baseline": self.baseline,
+            "validation_status": "NOT_VALIDATED",
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class GoldenDemoEmergencyReturnBatchReadModel:
+    """Presentation projection of deterministic emergency-return alternatives."""
+
+    candidate_batch_id: str
+    source_exception_id: str
+    source_priority_assessment_id: str
+    emergency_aircraft_id: str
+    generated_at_utc: str
+    generator_profile_id: str
+    candidates: tuple[GoldenDemoEmergencyReturnCandidateReadModel, ...]
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "candidate_batch_id": self.candidate_batch_id,
+            "source_exception_id": self.source_exception_id,
+            "source_priority_assessment_id": self.source_priority_assessment_id,
+            "emergency_aircraft_id": self.emergency_aircraft_id,
+            "generated_at_utc": self.generated_at_utc,
+            "generator_profile_id": self.generator_profile_id,
+            "candidate_count": len(self.candidates),
+            "candidates": [item.to_dict() for item in self.candidates],
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class GoldenDemoCandidateComparisonReadModel:
     """One candidate joined with its isolated Safety Validation evidence."""
 
@@ -410,6 +484,7 @@ class GoldenDemoSessionReadModel:
     primary_conflict: GoldenDemoConflictEvidenceReadModel | None
     deviation: GoldenDemoDeviationReadModel | None
     emergency: GoldenDemoEmergencyReadModel | None
+    emergency_return_candidates: GoldenDemoEmergencyReturnBatchReadModel | None
     candidate_comparisons: tuple[GoldenDemoCandidateComparisonReadModel, ...]
     exception_queue: ExceptionQueueSnapshotReadModel | None
     recommendation: ResolutionRecommendationSetReadModel | None
@@ -437,6 +512,11 @@ class GoldenDemoSessionReadModel:
             ),
             "deviation": self.deviation.to_dict() if self.deviation is not None else None,
             "emergency": self.emergency.to_dict() if self.emergency is not None else None,
+            "emergency_return_candidates": (
+                self.emergency_return_candidates.to_dict()
+                if self.emergency_return_candidates is not None
+                else None
+            ),
             "candidate_comparisons": [
                 item.to_dict() for item in self.candidate_comparisons
             ],
@@ -586,6 +666,10 @@ class InProcessGoldenDemoSessionApi:
             fallback=runtime.simulation.engine.snapshot(),
         )
         queue = runtime.exception_queue_api.get_current(include_resolved=True)
+        emergency_return_batch = _build_emergency_return_candidates(
+            step_result=step_result,
+            runtime=runtime,
+        )
         recommendation = runtime.recommendation_api.get_current()
         controller_decision = runtime.controller_decision_api.get_current()
         return GoldenDemoSessionReadModel(
@@ -626,6 +710,11 @@ class InProcessGoldenDemoSessionApi:
                 step_result=step_result,
                 scenario_events=runtime.simulation.timeline.events,
                 queue=queue,
+            ),
+            emergency_return_candidates=(
+                _map_emergency_return_batch(emergency_return_batch)
+                if emergency_return_batch is not None
+                else None
             ),
             candidate_comparisons=_map_candidate_comparisons(resolution_result),
             exception_queue=queue,
@@ -820,6 +909,84 @@ def _map_emergency(
         source_event_ids=assessment.source_event_ids,
         queue_exception_id=queue_item.exception_id if queue_item is not None else None,
         queue_rank=queue_rank,
+    )
+
+
+def _build_emergency_return_candidates(*, step_result, runtime):
+    if step_result is None:
+        return None
+    exception = next(
+        (
+            item
+            for item in step_result.exception_queue_snapshot.items
+            if isinstance(item, OperationalPriorityExceptionItem)
+            and item.assessment.priority_level is OperationalPriorityLevel.EMERGENCY
+        ),
+        None,
+    )
+    if exception is None:
+        return None
+    profile_by_id = {item.profile_id: item for item in runtime.performance_profiles}
+    metadata_by_id = {
+        item.aircraft_id: item.metadata for item in runtime.definition.aircraft
+    }
+    performance_by_aircraft = {
+        state.aircraft_id: profile_by_id[
+            metadata_by_id[state.aircraft_id].performance_class
+        ]
+        for state in step_result.traffic_snapshot.states
+    }
+    return runtime.emergency_return_candidate_generator.generate(
+        exception,
+        step_result.traffic_snapshot.states,
+        performance_by_aircraft,
+    )
+
+
+def _map_emergency_return_batch(
+    batch: EmergencyReturnCandidateBatch,
+) -> GoldenDemoEmergencyReturnBatchReadModel:
+    return GoldenDemoEmergencyReturnBatchReadModel(
+        candidate_batch_id=batch.candidate_batch_id,
+        source_exception_id=batch.source_exception_id,
+        source_priority_assessment_id=batch.source_priority_assessment_id,
+        emergency_aircraft_id=batch.emergency_aircraft_id,
+        generated_at_utc=_utc_text(batch.generated_at_utc),
+        generator_profile_id=batch.generator_profile_id,
+        candidates=tuple(
+            GoldenDemoEmergencyReturnCandidateReadModel(
+                candidate_id=candidate.candidate_id,
+                strategy=candidate.strategy.value,
+                arrival_sequence=candidate.arrival_sequence,
+                actions=tuple(
+                    GoldenDemoEmergencyReturnActionReadModel(
+                        aircraft_id=action.aircraft_id,
+                        maneuver_type=action.maneuver.maneuver_type.value,
+                        target_ground_speed_kt=(
+                            action.maneuver.target_ground_speed_kt
+                            if isinstance(action.maneuver, SpeedManeuver)
+                            else None
+                        ),
+                        delay_seconds=(
+                            action.maneuver.delay_seconds
+                            if isinstance(action.maneuver, EntryDelayManeuver)
+                            else None
+                        ),
+                        target_sequence_position=(
+                            action.maneuver.target_sequence_position
+                            if isinstance(action.maneuver, SequenceChangeManeuver)
+                            else None
+                        ),
+                    )
+                    for action in candidate.actions
+                ),
+                preserves_stabilized_arrival=candidate.preserves_stabilized_arrival,
+                estimated_delay_seconds=candidate.cost.estimated_delay_seconds,
+                operational_cost_score=candidate.cost.operational_cost_score,
+                baseline=candidate.is_baseline,
+            )
+            for candidate in batch.candidates
+        ),
     )
 
 

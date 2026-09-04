@@ -228,11 +228,24 @@ def run_golden_demo_regression(
             _aircraft(emergency, "MIL-T01").get("emergency_status") == "NONE",
             "declaration must not mutate Aircraft Runtime before approval",
         )
+        return_batch = _mapping(emergency, "emergency_return_candidates")
+        return_candidates = tuple(
+            _mapping_value(item) for item in _list(return_batch, "candidates")
+        )
+        _require(
+            tuple(item.get("candidate_id") for item in return_candidates)
+            == ("ER-CAND-A", "ER-CAND-B", "ER-CAND-C", "ER-CAND-D"),
+            "emergency return candidates must contain ER-CAND-A through ER-CAND-D",
+        )
+        _require(
+            all(item.get("validation_status") == "NOT_VALIDATED" for item in return_candidates),
+            "generated emergency return candidates must remain unvalidated",
+        )
         checkpoints.append(
             _checkpoint(
                 "EMERGENCY",
                 emergency,
-                "MIL-T01 | operational priority 100 | queue rank 1",
+                "MIL-T01 | priority 100 | queue rank 1 | 4 candidates",
             )
         )
 

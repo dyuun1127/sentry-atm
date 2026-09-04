@@ -6,10 +6,10 @@ SENTRY는 청주공항(RKTU) 중심 Terminal Simulation Area에서 미래 4DT를
 
 ## 현재 릴리스 상태
 
-- Phase 0~17 구현 및 `main` 통합, Phase 18-A 구현 완료
+- Phase 0~17 구현 및 `main` 통합, Phase 18-A~B 구현 완료
 - Golden Demo Release Preflight `5/5` 통과
 - 실제 Loopback HTTP Multi-Path Regression `11/11` 통과
-- 전체 자동 테스트 `846 passed`
+- 전체 자동 테스트 `854 passed`
 - 인터넷, Docker, PostgreSQL/PostGIS, Node.js 없이 로컬 실행 가능
 
 ## 핵심 기능
@@ -23,6 +23,7 @@ SENTRY는 청주공항(RKTU) 중심 Terminal Simulation Area에서 미래 4DT를
 7. 적용 후 동일한 계산 경로로 충돌 해소 여부를 재검증한다.
 8. 단일 화면 Golden Demo에서 계획·실제·예측 항적과 판단 근거를 시각화한다.
 9. T+240 비상 선언을 독립 Priority로 평가해 Queue 최상위와 Radar에 동기화한다.
+10. 비상 복귀 순서와 주변 Traffic 조정을 다중 Action 후보로 생성하되 승인 전에는 적용하지 않는다.
 
 ## 구현 이력
 
@@ -94,6 +95,7 @@ SENTRY는 청주공항(RKTU) 중심 Terminal Simulation Area에서 미래 4DT를
 - Phase 17-C: Radar Marker & Trail Continuous Animation 구현 완료
 - Phase 17-D: Playback Controls, Timeline & Cue Auto-pause 구현 완료
 - Phase 18-A: Emergency Playback Session Integration 구현 완료
+- Phase 18-B: Emergency Return Candidate Generation 구현 완료
 
 ## 핵심 문서
 
@@ -191,7 +193,7 @@ SENTRY ATM DEMO CHECK PASSED (11 checkpoints)
 | 대응 후보 생성 | T+75, CAND-A~E의 적용 전 안전성 비교와 추천 생성 |
 | 관제사 결정 | T+90, ACCEPT/MODIFY/REJECT와 판단 근거 Audit |
 | 승인 기동 적용 | 승인된 기동만 Runtime에 반영하고 CPA·위험도 재검증 |
-| 비상 이벤트 진행 | T+240, `MIL-T01` Operational Priority 100과 Queue 1순위 표시 |
+| 비상 이벤트 진행 | T+240, `MIL-T01` Priority 100·Queue 1순위 및 `ER-CAND-A~D` 생성 |
 | Run Reset | 파생 상태를 제거하고 깨끗한 `READY` Session 재생성 |
 
 ## 테스트 및 정적 검사
@@ -201,7 +203,7 @@ SENTRY ATM DEMO CHECK PASSED (11 checkpoints)
 .\.venv\Scripts\python.exe -m ruff check .
 ```
 
-현재 기준 결과는 Ruff 통과, `846 passed`다. 발표 전 점검과 병합 절차는
+현재 기준 결과는 Ruff 통과, `854 passed`다. 발표 전 점검과 병합 절차는
 [Golden Demo Release Readiness](docs/release_readiness.md)와
 [Final Release & Main Merge Checklist](docs/final_release.md)를 따른다.
 

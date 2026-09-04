@@ -13,6 +13,13 @@ from sentry_atm.domain.controller_decision import (
     ControllerDecisionAuditEntry,
     ControllerDecisionAuditLog,
 )
+from sentry_atm.domain.emergency_return import (
+    EmergencyReturnAction,
+    EmergencyReturnCandidate,
+    EmergencyReturnCandidateBatch,
+    EmergencyReturnManeuver,
+    EmergencyReturnStrategy,
+)
 from sentry_atm.domain.enums import (
     AircraftCategory,
     ConflictStatus,
@@ -102,6 +109,11 @@ __all__ = [
     "DataSource",
     "EmergencyStatus",
     "EmergencyType",
+    "EmergencyReturnAction",
+    "EmergencyReturnCandidate",
+    "EmergencyReturnCandidateBatch",
+    "EmergencyReturnManeuver",
+    "EmergencyReturnStrategy",
     "EntryDelayManeuver",
     "ExceptionKind",
     "ExceptionQueueItem",

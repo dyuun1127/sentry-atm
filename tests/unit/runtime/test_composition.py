@@ -121,6 +121,9 @@ def test_composition_wires_one_shared_clock_and_all_core_services() -> None:
     assert runtime.priority_evaluator.policy.profile_id == "POC_OPERATIONAL_PRIORITY_V1"
     assert runtime.exception_queue_service.policy.profile_id == "POC_EXCEPTION_QUEUE_V1"
     assert runtime.candidate_generator.profile.profile_id == "POC_RESOLUTION_V1"
+    assert runtime.emergency_return_candidate_generator.profile.profile_id == (
+        "POC_EMERGENCY_RETURN_V1"
+    )
     assert runtime.safety_validator.profile.profile_id == "POC_SAFETY_V1"
     assert runtime.recommendation_service.profile.profile_id == "POC_RECOMMENDATION_V1"
 

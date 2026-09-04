@@ -97,6 +97,8 @@ const elements = {
   emergencyRank: document.querySelector("[data-emergency-rank]"),
   emergencyDeclaredAt: document.querySelector("[data-emergency-declared-at]"),
   emergencyReasons: document.querySelector("[data-emergency-reasons]"),
+  emergencyCandidates: document.querySelector("[data-emergency-candidates]"),
+  emergencyCandidateList: document.querySelector("[data-emergency-candidate-list]"),
   aircraftLayer: document.querySelector("[data-aircraft-layer]"),
   trailLayer: document.querySelector("[data-trail-layer]"),
   playbackOffset: document.querySelector("[data-playback-offset]"),
@@ -726,6 +728,61 @@ function renderEmergency(emergency) {
     .join(" · ") || "—";
 }
 
+function emergencyActionText(action) {
+  if (action.maneuver_type === "SEQUENCE_CHANGE") {
+    return `${action.aircraft_id} → SEQ ${formatNumber(action.target_sequence_position)}`;
+  }
+  if (action.maneuver_type === "SPEED") {
+    return `${action.aircraft_id} → ${formatNumber(action.target_ground_speed_kt)} KT`;
+  }
+  if (action.maneuver_type === "ENTRY_DELAY") {
+    return `${action.aircraft_id} → DELAY ${formatNumber(action.delay_seconds)} SEC`;
+  }
+  return `${action.aircraft_id} → ${action.maneuver_type}`;
+}
+
+function renderEmergencyReturnCandidates(batch) {
+  const candidates = Array.isArray(batch?.candidates) ? batch.candidates : [];
+  elements.emergencyCandidates.hidden = candidates.length === 0;
+  elements.emergencyCandidateList.replaceChildren();
+  for (const candidate of candidates) {
+    const card = document.createElement("article");
+    card.className = `emergency-candidate${candidate.baseline ? " is-baseline" : ""}`;
+
+    const heading = document.createElement("div");
+    const candidateId = document.createElement("strong");
+    candidateId.textContent = candidate.candidate_id;
+    const status = document.createElement("span");
+    status.textContent = candidate.validation_status ?? "NOT VALIDATED";
+    heading.append(candidateId, status);
+
+    const strategy = document.createElement("p");
+    strategy.textContent = String(candidate.strategy ?? "UNKNOWN").replaceAll("_", " ");
+    const sequence = document.createElement("small");
+    sequence.textContent = `SEQ · ${(candidate.arrival_sequence ?? []).join(" → ")}`;
+    const actions = document.createElement("ul");
+    const actionItems = candidate.actions ?? [];
+    if (actionItems.length === 0) {
+      const item = document.createElement("li");
+      item.textContent = "NO ACTION BASELINE";
+      actions.append(item);
+    } else {
+      for (const action of actionItems) {
+        const item = document.createElement("li");
+        item.textContent = emergencyActionText(action);
+        actions.append(item);
+      }
+    }
+    const footer = document.createElement("div");
+    footer.append(
+      `COST ${formatNumber(candidate.operational_cost_score)}`,
+      candidate.preserves_stabilized_arrival ? " · STABLE ARRIVAL KEPT" : " · STABLE ARRIVAL DISPLACED",
+    );
+    card.append(heading, strategy, sequence, actions, footer);
+    elements.emergencyCandidateList.append(card);
+  }
+}
+
 function renderExceptionQueue(queue) {
   const items = Array.isArray(queue?.items)
     ? queue.items.filter((item) => item.status !== "RESOLVED")
@@ -1189,6 +1246,7 @@ function renderSession(session) {
   renderTrafficTable(traffic);
   renderDeviation(session.deviation);
   renderEmergency(session.emergency);
+  renderEmergencyReturnCandidates(session.emergency_return_candidates);
   renderStage(String(session.stage ?? "READY"));
   renderExceptionQueue(session.exception_queue);
   renderDecisionSupport(session);

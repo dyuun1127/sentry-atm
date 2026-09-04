@@ -4,7 +4,7 @@
 
 Phase 18-A는 해결된 Golden Demo Run을 T+90에서 T+240으로 진행하고, 기존 Synthetic
 `EVT-MIL-T01-EMERGENCY`를 Session·Exception Queue·Web UI에 동일한 Checkpoint로 노출한다.
-비상 복귀 후보 생성과 관제사 결정·적용은 이 단계의 범위가 아니다.
+Phase 18-B는 이 비상 증거에서 조정 후보를 생성한다. 관제사 결정·적용은 이 단계의 범위가 아니다.
 
 ## 2. 결정론적 전환
 
@@ -41,3 +41,24 @@ Playback이 T+240 Cue에 도달하면 정확한 Frame에서 자동 정지한 뒤
 - `MIL-T01` Radar Marker/Trail 강조
 - `EXCEPTION-PRIORITY-MIL-T01` Queue 최상위, `EMERGENCY / 100`
 - 기존 원 충돌 및 Post-action Revalidation 증거 보존
+
+## 6. Phase 18-B 비상 복귀 후보
+
+기존 Conflict Candidate는 한 Conflict Pair의 단일 기동을 표현한다. 비상 복귀는 대상 항공기의 순서
+상승과 주변 Traffic 조정을 한 계획으로 묶어야 하므로 `EmergencyReturnCandidateBatch`를 별도로 둔다.
+각 후보는 Arrival Sequence, 0개 이상의 Aircraft Action, 안정 접근기 보존 여부와 단순 Cost를 가진다.
+
+| 후보 | 전략 | Arrival Sequence / Action | 생성 단계 상태 |
+|---|---|---|---|
+| `ER-CAND-A` | `PROTECTED_PRIORITY_RETURN` | `CIV-A01` 뒤 `MIL-T01`, `CIV-A02` 30 kt 감속, `MIL-F02` 30초 지연 | `NOT_VALIDATED` |
+| `ER-CAND-B` | `PRIORITY_SEQUENCE_ONLY` | `MIL-T01`을 2번으로 이동, 주변 Traffic 조정 없음 | `NOT_VALIDATED` |
+| `ER-CAND-C` | `IMMEDIATE_LEAD` | `MIL-T01`을 1번으로 이동해 안정된 `CIV-A01`을 뒤로 이동 | `NOT_VALIDATED` |
+| `ER-CAND-D` | `NO_ACTION` | 기존 순서를 유지하는 비교 기준선 | `NOT_VALIDATED` |
+
+후보 ID와 출력 순서는 입력 Iterable 순서와 무관하다. `ER-CAND-A`의 추천 여부를 생성 단계에서 미리
+결정하지 않으며, `preserves_stabilized_arrival`도 Safety 판정이 아닌 후속 검증 입력 증거다. 속도 목표는
+대상 Aircraft Performance Profile의 최소속도보다 낮아지지 않는다.
+
+Session의 `emergency_return_candidates`는 Source Exception/Priority Assessment ID, 생성 UTC,
+Generator Profile과 네 후보를 JSON Primitive로 제공한다. Web UI는 후보를 `NOT VALIDATED · NOT APPLIED`
+상태로만 표시한다. 후보 생성 조회는 Clock, Queue, Aircraft Runtime과 기존 Audit을 변경하지 않는다.

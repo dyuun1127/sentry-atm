@@ -438,6 +438,20 @@
   보조 Action 및 CONFLICT_RESOLVED의 Primary Action으로 제공한다.
 - 검증: 모든 단계의 JSON 직렬화, Reset 격리 및 동일 실행 결정론 테스트
 
+### ASM-042 - Golden Demo 비상 복귀 후보 생성
+
+- 상태: `PROVISIONAL`
+- 내용: Phase 18-B의 `POC_EMERGENCY_RETURN_V1`은 기존 접근 순서
+  `CIV-A01 → CIV-A02 → MIL-F02 → CIV-A03 → MIL-T01`에서 이미 안정된 `CIV-A01`을 유지하고
+  `MIL-T01`을 2번으로 올리는 보호 복귀안을 생성한다.
+- 주변 조정: 보호 복귀안은 `CIV-A02`를 30 kt 감속하고 `MIL-F02` Terminal 진입을 30초 지연한다.
+  속도는 Performance Profile 최저속도에서 제한한다.
+- 비교안: 주변 조정 없는 2번 순서안, `CIV-A01`까지 앞지르는 즉시 선두안과 No-action 기준선을 함께
+  생성한다. 이들은 비교·격리 검증을 위한 후보이며 생성 자체는 안전 또는 추천을 뜻하지 않는다.
+- Cost: 후보의 5/20/35 점수와 30초 지연은 공식 운항 비용이 아닌 결정론적 PoC 정렬 입력이다.
+- Human-in-the-loop: 후보 생성은 Runtime, Queue, Audit 또는 실제 접근 순서를 변경하지 않는다.
+- 검증: 입력 순서 독립성, Stable ID, Performance 최저속도, Source Identity와 원 Traffic 불변 테스트
+
 ## 5. Phase별 확정 시점
 
 | Phase | 반드시 확정할 Assumption |
@@ -455,6 +469,7 @@
 | Phase 11 | ASM-028, 033, 039 |
 | Phase 12 | ASM-011, 021, 030, 032, 040 |
 | Phase 13 | ASM-041 |
+| Phase 18 | ASM-042 |
 
 ## 6. 변경 규칙
 

@@ -65,6 +65,7 @@ def test_ready_session_is_complete_json_ready_and_read_only() -> None:
     assert current.primary_conflict is None
     assert current.deviation is None
     assert current.emergency is None
+    assert current.emergency_return_candidates is None
     assert current.candidate_comparisons == ()
     assert current.exception_queue is None
     assert current.recommendation is None
@@ -223,6 +224,31 @@ def test_session_projects_each_completed_backend_stage() -> None:
     assert emergency.emergency.priority_score == 100.0
     assert emergency.emergency.queue_exception_id == "EXCEPTION-PRIORITY-MIL-T01"
     assert emergency.emergency.queue_rank == 1
+    assert emergency.emergency_return_candidates is not None
+    return_batch = emergency.emergency_return_candidates
+    assert return_batch.source_exception_id == "EXCEPTION-PRIORITY-MIL-T01"
+    assert return_batch.emergency_aircraft_id == "MIL-T01"
+    assert return_batch.generator_profile_id == "POC_EMERGENCY_RETURN_V1"
+    assert tuple(item.candidate_id for item in return_batch.candidates) == (
+        "ER-CAND-A",
+        "ER-CAND-B",
+        "ER-CAND-C",
+        "ER-CAND-D",
+    )
+    protected = return_batch.candidates[0]
+    assert protected.strategy == "PROTECTED_PRIORITY_RETURN"
+    assert protected.arrival_sequence[:2] == ("CIV-A01", "MIL-T01")
+    assert tuple(item.aircraft_id for item in protected.actions) == (
+        "MIL-T01",
+        "CIV-A02",
+        "MIL-F02",
+    )
+    assert protected.actions[1].target_ground_speed_kt == 220.0
+    assert protected.actions[2].delay_seconds == 30.0
+    assert all(
+        item.to_dict()["validation_status"] == "NOT_VALIDATED"
+        for item in return_batch.candidates
+    )
     assert emergency.exception_queue is not None
     assert emergency.exception_queue.top_exception_id == "EXCEPTION-PRIORITY-MIL-T01"
     assert emergency.revalidation == resolved.revalidation
@@ -278,6 +304,7 @@ def test_reset_returns_a_new_empty_session_run_with_initial_traffic() -> None:
     assert current.primary_conflict is None
     assert current.deviation is None
     assert current.emergency is None
+    assert current.emergency_return_candidates is None
     assert current.candidate_comparisons == ()
     assert current.revalidation is None
     assert next(item for item in current.traffic if item.aircraft_id == "MIL-F01").altitude_ft == (

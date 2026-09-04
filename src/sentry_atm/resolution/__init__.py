@@ -1,5 +1,10 @@
 """Deterministic generation of restricted Resolution Candidates."""
 
+from sentry_atm.resolution.emergency_return import (
+    POC_EMERGENCY_RETURN_V1_GENERATION_PROFILE,
+    DeterministicEmergencyReturnCandidateGenerator,
+    EmergencyReturnCandidateGenerationProfile,
+)
 from sentry_atm.resolution.generator import DeterministicResolutionCandidateGenerator
 from sentry_atm.resolution.profile import (
     POC_RESOLUTION_V1_GENERATION_PROFILE,
@@ -17,9 +22,12 @@ from sentry_atm.resolution.validator import (
 __all__ = [
     "POC_RESOLUTION_V1_GENERATION_PROFILE",
     "CandidateTargetRole",
+    "DeterministicEmergencyReturnCandidateGenerator",
     "DeterministicResolutionCandidateGenerator",
     "IsolatedResolutionSafetyValidator",
     "POC_SAFETY_V1_VALIDATION_PROFILE",
+    "POC_EMERGENCY_RETURN_V1_GENERATION_PROFILE",
+    "EmergencyReturnCandidateGenerationProfile",
     "ResolutionCandidateGenerationProfile",
     "ResolutionCandidateTemplate",
     "ResolutionSafetyValidationProfile",

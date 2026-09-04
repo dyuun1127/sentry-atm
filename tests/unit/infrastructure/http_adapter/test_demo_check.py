@@ -41,7 +41,7 @@ def test_real_loopback_regression_verifies_complete_golden_demo() -> None:
     )
     assert report.checkpoints[5].detail == "applied 9,000 ft | SAFE / LOW / RESOLVED"
     assert report.checkpoints[6].detail == (
-        "MIL-T01 | operational priority 100 | queue rank 1"
+        "MIL-T01 | priority 100 | queue rank 1 | 4 candidates"
     )
     assert report.checkpoints[-3].detail.startswith("8,800 ft | isolated SAFE")
     assert "HTTP 409" in report.checkpoints[-2].detail

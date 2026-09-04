@@ -31,6 +31,7 @@ from sentry_atm.priority import OperationalPriorityEvaluator
 from sentry_atm.recommendation import DeterministicRecommendationRankingService
 from sentry_atm.reference_data import POC_PERFORMANCE_PROFILES
 from sentry_atm.resolution import (
+    DeterministicEmergencyReturnCandidateGenerator,
     DeterministicResolutionCandidateGenerator,
     IsolatedResolutionSafetyValidator,
 )
@@ -108,6 +109,7 @@ class GoldenDemoRuntime:
     priority_evaluator: OperationalPriorityEvaluator
     exception_queue_service: ExceptionQueueService
     candidate_generator: DeterministicResolutionCandidateGenerator
+    emergency_return_candidate_generator: DeterministicEmergencyReturnCandidateGenerator
     safety_validator: IsolatedResolutionSafetyValidator
     recommendation_service: DeterministicRecommendationRankingService
     recommendation_catalog: InMemoryRecommendationCatalog
@@ -165,6 +167,9 @@ def build_golden_demo_runtime() -> GoldenDemoRuntime:
         priority_evaluator=OperationalPriorityEvaluator(),
         exception_queue_service=exception_queue_service,
         candidate_generator=DeterministicResolutionCandidateGenerator(),
+        emergency_return_candidate_generator=(
+            DeterministicEmergencyReturnCandidateGenerator()
+        ),
         safety_validator=IsolatedResolutionSafetyValidator(),
         recommendation_service=DeterministicRecommendationRankingService(),
         recommendation_catalog=recommendation_catalog,
