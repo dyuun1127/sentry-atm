@@ -232,6 +232,9 @@ def test_session_projects_each_completed_backend_stage() -> None:
     assert return_batch.validation_profile_id == "POC_EMERGENCY_RETURN_SAFETY_V1"
     assert return_batch.validation_horizon_seconds == 120.0
     assert return_batch.baseline_conflict_aircraft_ids == (("CIV-A03", "MIL-F01"),)
+    assert return_batch.recommendation_availability == "AVAILABLE"
+    assert return_batch.ranking_policy_id == "POC_EMERGENCY_RETURN_RECOMMENDATION_V1"
+    assert return_batch.primary_recommendation_candidate_id == "ER-CAND-B"
     assert tuple(item.candidate_id for item in return_batch.candidates) == (
         "ER-CAND-A",
         "ER-CAND-B",
@@ -253,6 +256,16 @@ def test_session_projects_each_completed_backend_stage() -> None:
         "SAFE",
         "UNSAFE",
         "UNSAFE",
+    )
+    assert tuple(item.recommendation_rank for item in return_batch.candidates) == (
+        2,
+        1,
+        None,
+        None,
+    )
+    assert return_batch.candidates[1].recommendation_explanation is not None
+    assert "Controller decision required" in (
+        return_batch.candidates[1].recommendation_explanation or ""
     )
     assert all(item.new_conflict_aircraft_ids == () for item in return_batch.candidates)
     assert protected.performance_feasible

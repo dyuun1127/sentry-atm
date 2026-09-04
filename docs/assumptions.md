@@ -468,6 +468,20 @@
 - Human-in-the-loop: 격리 검증은 어떤 Candidate Action도 Runtime에 적용하거나 승인하지 않는다.
 - 검증: 후보별 Traffic 복사, 전 Pair 재계산, 입력 순서 독립성, Gate Reason Code와 원 State 불변 테스트
 
+### ASM-044 - 비상 복귀 추천 순위 정책
+
+- 상태: `PROVISIONAL`
+- 내용: Phase 18-D의 `POC_EMERGENCY_RETURN_RECOMMENDATION_V1`은 완전한 Validation Run에서 `SAFE`인
+  비상 복귀 Action Candidate만 최대 3개까지 추천한다. No-action과 `UNSAFE` 후보는 제외한다.
+- 정렬: Operational Cost Score, 예상 지연 초, 예상 경로 연장 NM, Candidate ID를 차례로 오름차순
+  비교한다. 이 값은 공식 운항 비용이나 작전 우선순위 점수가 아닌 Phase 18-B의 PoC 비교 입력이다.
+- 결과: Golden Demo에서는 비용 5·지연 0초인 `ER-CAND-B`가 1순위, 비용 20·지연 30초인
+  `ER-CAND-A`가 2순위다. 두 후보는 동일한 Phase 18-C Safety Gate를 통과했다.
+- Human-in-the-loop: 추천과 순위는 관제 결정을 대신하지 않으며 Candidate Action, Arrival Sequence,
+  Aircraft Runtime, Queue 또는 Audit을 변경하지 않는다.
+- 검증: SAFE-only 필터, 순위 결정론, 입력 순서 독립성, Source Identity, 명시적 No-safe 결과와 Runtime
+  불변 테스트
+
 ## 5. Phase별 확정 시점
 
 | Phase | 반드시 확정할 Assumption |
@@ -485,7 +499,7 @@
 | Phase 11 | ASM-028, 033, 039 |
 | Phase 12 | ASM-011, 021, 030, 032, 040 |
 | Phase 13 | ASM-041 |
-| Phase 18 | ASM-042, 043 |
+| Phase 18 | ASM-042~044 |
 
 ## 6. 변경 규칙
 

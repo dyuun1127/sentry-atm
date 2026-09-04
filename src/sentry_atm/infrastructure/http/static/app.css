@@ -512,6 +512,23 @@ h1 {
 .emergency-candidate.is-baseline { background: rgba(255, 255, 255, 0.018); }
 .emergency-candidate.is-safe { box-shadow: inset 0 2px 0 rgba(113, 227, 172, 0.72); }
 .emergency-candidate.is-unsafe { box-shadow: inset 0 2px 0 rgba(242, 119, 108, 0.58); }
+.emergency-candidate.is-primary-recommendation {
+  background: linear-gradient(180deg, rgba(231, 183, 101, 0.1), rgba(113, 227, 172, 0.035));
+  outline: 1px solid rgba(231, 183, 101, 0.55);
+  outline-offset: -1px;
+}
+
+.emergency-recommendation-rank {
+  margin-top: 10px;
+  color: var(--faint);
+  font-family: var(--mono);
+  font-size: 7px;
+  letter-spacing: 0.08em;
+}
+
+.emergency-candidate.is-recommended .emergency-recommendation-rank {
+  color: var(--amber);
+}
 
 .emergency-candidate > div:first-child {
   display: flex;
@@ -579,6 +596,14 @@ h1 {
 .emergency-candidate.is-safe .emergency-validation-evidence {
   border-color: rgba(113, 227, 172, 0.25);
   color: var(--green);
+}
+
+.emergency-candidate .emergency-recommendation-explanation {
+  min-height: 48px;
+  margin: 9px 0;
+  color: var(--muted);
+  line-height: 1.55;
+  white-space: normal;
 }
 
 .emergency-candidate > div:last-child {

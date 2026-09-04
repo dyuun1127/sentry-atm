@@ -18,6 +18,7 @@ from sentry_atm.domain import (
     ConflictStatus,
     ControllerDecisionType,
     EmergencyReturnCandidateBatch,
+    EmergencyReturnRecommendationSet,
     EmergencyReturnSafetyValidationRun,
     EntryDelayManeuver,
     ExceptionStatus,
@@ -339,6 +340,8 @@ class GoldenDemoEmergencyReturnCandidateReadModel:
     priority_target_achieved: bool
     stabilized_arrival_preserved: bool
     reason_codes: tuple[str, ...]
+    recommendation_rank: int | None
+    recommendation_explanation: str | None
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -363,6 +366,9 @@ class GoldenDemoEmergencyReturnCandidateReadModel:
             "priority_target_achieved": self.priority_target_achieved,
             "stabilized_arrival_preserved": self.stabilized_arrival_preserved,
             "reason_codes": list(self.reason_codes),
+            "recommended": self.recommendation_rank is not None,
+            "recommendation_rank": self.recommendation_rank,
+            "recommendation_explanation": self.recommendation_explanation,
         }
 
 
@@ -380,6 +386,10 @@ class GoldenDemoEmergencyReturnBatchReadModel:
     validation_profile_id: str
     validation_horizon_seconds: float
     baseline_conflict_aircraft_ids: tuple[tuple[str, str], ...]
+    recommendation_set_id: str
+    ranking_policy_id: str
+    recommendation_availability: str
+    primary_recommendation_candidate_id: str | None
     candidates: tuple[GoldenDemoEmergencyReturnCandidateReadModel, ...]
 
     def to_dict(self) -> dict[str, object]:
@@ -396,6 +406,12 @@ class GoldenDemoEmergencyReturnBatchReadModel:
             "baseline_conflict_aircraft_ids": [
                 list(item) for item in self.baseline_conflict_aircraft_ids
             ],
+            "recommendation_set_id": self.recommendation_set_id,
+            "ranking_policy_id": self.ranking_policy_id,
+            "recommendation_availability": self.recommendation_availability,
+            "primary_recommendation_candidate_id": (
+                self.primary_recommendation_candidate_id
+            ),
             "candidate_count": len(self.candidates),
             "candidates": [item.to_dict() for item in self.candidates],
         }
@@ -710,6 +726,16 @@ class InProcessGoldenDemoSessionApi:
             if emergency_return_batch is not None
             else None
         )
+        emergency_return_recommendations = (
+            runtime.emergency_return_recommendation_service.recommend(
+                emergency_return_batch,
+                emergency_return_validation,
+                generated_at_utc=emergency_return_validation.evaluated_at_utc,
+            )
+            if emergency_return_batch is not None
+            and emergency_return_validation is not None
+            else None
+        )
         recommendation = runtime.recommendation_api.get_current()
         controller_decision = runtime.controller_decision_api.get_current()
         return GoldenDemoSessionReadModel(
@@ -755,9 +781,11 @@ class InProcessGoldenDemoSessionApi:
                 _map_emergency_return_batch(
                     emergency_return_batch,
                     emergency_return_validation,
+                    emergency_return_recommendations,
                 )
                 if emergency_return_batch is not None
                 and emergency_return_validation is not None
+                and emergency_return_recommendations is not None
                 else None
             ),
             candidate_comparisons=_map_candidate_comparisons(resolution_result),
@@ -993,9 +1021,13 @@ def _performance_by_aircraft(*, step_result, runtime):
 def _map_emergency_return_batch(
     batch: EmergencyReturnCandidateBatch,
     validation: EmergencyReturnSafetyValidationRun,
+    recommendations: EmergencyReturnRecommendationSet,
 ) -> GoldenDemoEmergencyReturnBatchReadModel:
     validation_by_candidate = {
         item.candidate_id: item for item in validation.results
+    }
+    recommendation_by_candidate = {
+        item.candidate_id: item for item in recommendations.recommendations
     }
     return GoldenDemoEmergencyReturnBatchReadModel(
         candidate_batch_id=batch.candidate_batch_id,
@@ -1009,6 +1041,14 @@ def _map_emergency_return_batch(
         validation_horizon_seconds=validation.horizon_seconds,
         baseline_conflict_aircraft_ids=tuple(
             item.pair.aircraft_ids for item in validation.baseline_conflicts
+        ),
+        recommendation_set_id=recommendations.recommendation_set_id,
+        ranking_policy_id=recommendations.ranking_policy_id,
+        recommendation_availability=recommendations.availability.value,
+        primary_recommendation_candidate_id=(
+            recommendations.primary_recommendation.candidate_id
+            if recommendations.primary_recommendation is not None
+            else None
         ),
         candidates=tuple(
             GoldenDemoEmergencyReturnCandidateReadModel(
@@ -1071,6 +1111,16 @@ def _map_emergency_return_batch(
                     for item in validation_by_candidate[
                         candidate.candidate_id
                     ].reason_codes
+                ),
+                recommendation_rank=(
+                    recommendation_by_candidate[candidate.candidate_id].rank
+                    if candidate.candidate_id in recommendation_by_candidate
+                    else None
+                ),
+                recommendation_explanation=(
+                    recommendation_by_candidate[candidate.candidate_id].explanation
+                    if candidate.candidate_id in recommendation_by_candidate
+                    else None
                 ),
             )
             for candidate in batch.candidates

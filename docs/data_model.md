@@ -442,6 +442,12 @@ Reason Code를 보존한다. `EmergencyReturnSafetyValidationRun`은 동일 UTC�
 Conflict와 후보 결과를 Candidate ID 순서로 묶는다. 두 모델 모두 불변 계산 증거이며 Controller Decision,
 Recommendation 또는 적용된 Aircraft State를 포함하지 않는다.
 
+`EmergencyReturnRecommendation`은 `SAFE`인 다중 Action Candidate와 같은 ID의 Validation Result를
+연결하고 1부터 시작하는 순위, 양의 Safety 근거와 설명을 보존한다. `EmergencyReturnRecommendationSet`은
+Source Exception·Candidate Batch·Validation Run ID, UTC, Ranking Policy와 `AVAILABLE` 또는
+`NO_SAFE_CANDIDATE` 결과를 묶는다. 기존 단일 충돌용 `ResolutionRecommendation`과 별도 모델이며,
+추천 생성 자체는 Controller Decision이나 Runtime 적용이 아니다.
+
 ## 20. 의도적으로 제외한 모델
 
 다음은 현재 Phase의 책임이 아니므로 아직 구현하지 않는다.

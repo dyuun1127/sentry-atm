@@ -748,15 +748,16 @@ function renderEmergencyReturnCandidates(batch) {
   elements.emergencyCandidateList.replaceChildren();
   const safeCount = candidates.filter((item) => item.verdict === "SAFE").length;
   elements.emergencyValidationSummary.textContent = candidates.length > 0
-    ? `${safeCount} SAFE · ${candidates.length - safeCount} UNSAFE · ${formatNumber(
-      batch.validation_horizon_seconds,
-    )} SEC ISOLATED · NOT APPLIED`
+    ? `PRIMARY ${batch.primary_recommendation_candidate_id ?? "NONE"} · ${safeCount} SAFE · `
+      + "CONTROLLER DECISION REQUIRED · NOT APPLIED"
     : "ISOLATED VALIDATION · NOT APPLIED";
   for (const candidate of candidates) {
     const card = document.createElement("article");
     card.className = `emergency-candidate${candidate.baseline ? " is-baseline" : ""}`;
     card.classList.toggle("is-safe", candidate.verdict === "SAFE");
     card.classList.toggle("is-unsafe", candidate.verdict === "UNSAFE");
+    card.classList.toggle("is-recommended", candidate.recommended === true);
+    card.classList.toggle("is-primary-recommendation", candidate.recommendation_rank === 1);
 
     const heading = document.createElement("div");
     const candidateId = document.createElement("strong");
@@ -764,6 +765,14 @@ function renderEmergencyReturnCandidates(batch) {
     const status = document.createElement("span");
     status.textContent = candidate.validation_status ?? "NOT VALIDATED";
     heading.append(candidateId, status);
+
+    const recommendationRank = document.createElement("div");
+    recommendationRank.className = "emergency-recommendation-rank";
+    recommendationRank.textContent = candidate.recommended
+      ? `RANK ${String(candidate.recommendation_rank).padStart(2, "0")} · ${
+        candidate.recommendation_rank === 1 ? "PRIMARY RECOMMENDATION" : "SAFE ALTERNATIVE"
+      }`
+      : "NOT RECOMMENDED";
 
     const strategy = document.createElement("p");
     strategy.textContent = String(candidate.strategy ?? "UNKNOWN").replaceAll("_", " ");
@@ -790,12 +799,25 @@ function renderEmergencyReturnCandidates(batch) {
       candidate.stabilized_arrival_preserved ? "KEPT" : "DISPLACED"
     }`;
     evidence.title = (candidate.reason_codes ?? []).join(" · ");
+    const recommendationExplanation = document.createElement("small");
+    recommendationExplanation.className = "emergency-recommendation-explanation";
+    recommendationExplanation.textContent = candidate.recommendation_explanation
+      ?? "Excluded by deterministic Safety gates; not ranked.";
     const footer = document.createElement("div");
     footer.append(
       `COST ${formatNumber(candidate.operational_cost_score)}`,
       candidate.preserves_stabilized_arrival ? " · STABLE ARRIVAL KEPT" : " · STABLE ARRIVAL DISPLACED",
     );
-    card.append(heading, strategy, sequence, actions, evidence, footer);
+    card.append(
+      heading,
+      recommendationRank,
+      strategy,
+      sequence,
+      actions,
+      evidence,
+      recommendationExplanation,
+      footer,
+    );
     elements.emergencyCandidateList.append(card);
   }
 }

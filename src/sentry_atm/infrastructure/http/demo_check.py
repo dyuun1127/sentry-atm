@@ -251,11 +251,37 @@ def run_golden_demo_regression(
             == "POC_EMERGENCY_RETURN_SAFETY_V1",
             "Emergency Return validation must expose its source-labelled profile",
         )
+        _require(
+            return_batch.get("ranking_policy_id")
+            == "POC_EMERGENCY_RETURN_RECOMMENDATION_V1",
+            "Emergency Return recommendation must expose its ranking policy",
+        )
+        _require(
+            return_batch.get("recommendation_availability") == "AVAILABLE"
+            and return_batch.get("primary_recommendation_candidate_id") == "ER-CAND-B",
+            "ER-CAND-B must be the primary available Emergency Return recommendation",
+        )
+        _require(
+            tuple(item.get("recommendation_rank") for item in return_candidates)
+            == (2, 1, None, None),
+            "only SAFE Emergency Return candidates may receive contiguous ranks",
+        )
+        _require(
+            all(
+                item.get("recommended") is (item.get("candidate_id") in {"ER-CAND-A", "ER-CAND-B"})
+                for item in return_candidates
+            ),
+            "Emergency Return recommended flags must match the ranked SAFE plans",
+        )
+        _require(
+            _aircraft(emergency, "MIL-T01").get("emergency_status") == "NONE",
+            "Emergency Return recommendation must not mutate Aircraft Runtime",
+        )
         checkpoints.append(
             _checkpoint(
                 "EMERGENCY",
                 emergency,
-                "MIL-T01 | priority 100 | 2 safe / 2 unsafe | not applied",
+                "MIL-T01 | ER-CAND-B rank 1 | controller decision required | not applied",
             )
         )
 

@@ -190,6 +190,16 @@ Session을 사용해 네 가지 Human-in-the-loop 경로를 독립 Reset Run으�
 - MODIFY 7,200 ft → 최저고도 Rule 위반 → 적용 HTTP 409 및 Runtime 불변
 - REJECT → Audit만 기록하고 재검증·적용 없음
 
+## 15. Phase 18 Emergency Return Projection
+
+T+240의 `emergency_return_candidates`는 후보 생성과 격리 검증에 더해 Phase 18-D 추천 결과를 한 화면용
+증거 묶음으로 제공한다. Batch 수준에는 `recommendation_set_id`, `ranking_policy_id`,
+`recommendation_availability`, `primary_recommendation_candidate_id`가 있고, 각 후보에는 `recommended`,
+`recommendation_rank`, `recommendation_explanation`이 있다.
+
+Golden Demo의 Rank는 `ER-CAND-B=1`, `ER-CAND-A=2`이며 C/D는 `null`이다. 이 Read Model은 조회 시
+결정론적으로 재계산되지만 Clock, Traffic, Queue, Audit 또는 Aircraft Runtime을 변경하지 않는다.
+
 회귀 검사는 UI 자산, 고정 Stage/시각, Decision Audit, Validation 및 Authorization 연결, 적용 전후
 Aircraft State와 마지막 Clean Reset까지 확인한다. 각 경로가 앞 경로의 Runtime Anchor나 파생 증거를
 공유하지 않도록 Run 번호가 0부터 4까지 증가한다.

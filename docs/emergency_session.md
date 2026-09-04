@@ -5,7 +5,8 @@
 Phase 18-A는 해결된 Golden Demo Run을 T+90에서 T+240으로 진행하고, 기존 Synthetic
 `EVT-MIL-T01-EMERGENCY`를 Session·Exception Queue·Web UI에 동일한 Checkpoint로 노출한다.
 Phase 18-B는 이 비상 증거에서 조정 후보를 생성하고 Phase 18-C는 각 후보를 원 Traffic의 복사본에서
-격리 검증한다. 관제사 결정·적용은 이 단계의 범위가 아니다.
+격리 검증한다. Phase 18-D는 검증된 안전 후보만 결정론적으로 정렬한다. 관제사 결정·적용은 이 단계의
+범위가 아니다.
 
 ## 2. 결정론적 전환
 
@@ -91,3 +92,22 @@ Conflict로 중복 판정하지 않는다. 대신 Validation Run에 `baseline_co
 
 Session과 Web UI는 120초 검증 Profile, 기준선 Conflict, 후보별 Verdict·Reason Code·Gate 증거를 표시한다.
 `SAFE`는 후속 추천 대상으로 사용할 수 있다는 의미일 뿐이며 `NOT APPLIED` 상태를 유지한다.
+
+## 8. Phase 18-D 비상 복귀 추천 순위
+
+`DeterministicEmergencyReturnRecommendationRankingService`는 Phase 18-C의 완전한 Validation Run에서
+`SAFE`인 Action Candidate만 선택한다. No-action 기준선과 `UNSAFE` 후보는 추천할 수 없다. 선택한 후보는
+다음 키를 오름차순으로 비교하며 Candidate ID는 동률 해소에만 사용한다.
+
+1. `operational_cost_score`
+2. `estimated_delay_seconds`
+3. `estimated_path_extension_nm`
+4. `candidate_id`
+
+Golden Demo에서는 `ER-CAND-B`가 비용 5·지연 0초로 1순위, `ER-CAND-A`가 비용 20·지연 30초로
+2순위다. C와 D는 순위가 없다. 각 Recommendation은 원 Candidate와 Validation Result를 그대로 연결하고
+안전 Gate, 순서, 비용과 `Controller decision required; not applied` 설명을 보존한다.
+
+Session API는 Recommendation Set ID, Ranking Policy ID, Availability, Primary Candidate ID와 후보별
+Rank·설명을 기존 `emergency_return_candidates` 증거 묶음에 추가한다. UI의 Primary 표시는 실행 명령이
+아니며, 추천 조회 전후 Clock·Traffic·Queue·Audit과 Aircraft Runtime은 동일해야 한다.

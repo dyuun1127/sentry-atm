@@ -132,6 +132,9 @@ def test_ui_assets_include_every_fixed_session_command_and_busy_boundary() -> No
     assert b"session.emergency_return_candidates" in script
     assert b"emergencyValidationSummary" in script
     assert b"candidate.new_conflict_aircraft_ids" in script
+    assert b"batch.primary_recommendation_candidate_id" in script
+    assert b"candidate.recommendation_rank === 1" in script
+    assert b"candidate.recommendation_explanation" in script
     assert b'emergencyAircraftId = currentSession?.emergency?.aircraft_id' in script
     assert b"function renderCandidateComparisons(candidates)" in script
     assert b'executeCommand("ACCEPT_RECOMMENDATION")' in script

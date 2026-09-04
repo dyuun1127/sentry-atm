@@ -34,3 +34,10 @@ POC_RECOMMENDATION_V1_RANKING_PROFILE = RecommendationRankingProfile(
     max_recommendations=3,
     source_reference="ASM-027 ASM-038 POC RANKING POLICY",
 )
+
+
+POC_EMERGENCY_RETURN_RECOMMENDATION_V1_RANKING_PROFILE = RecommendationRankingProfile(
+    profile_id="POC_EMERGENCY_RETURN_RECOMMENDATION_V1",
+    max_recommendations=3,
+    source_reference="ASM-044 POC EMERGENCY RETURN RANKING POLICY",
+)
