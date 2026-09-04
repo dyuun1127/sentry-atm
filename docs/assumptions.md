@@ -482,6 +482,16 @@
 - 검증: SAFE-only 필터, 순위 결정론, 입력 순서 독립성, Source Identity, 명시적 No-safe 결과와 Runtime
   불변 테스트
 
+### ASM-045 - 비상 복귀 관제 결정 경계
+
+- 상태: `PROVISIONAL`
+- 내용: 비상 복귀 추천 묶음에는 한 번의 최종 Accept/Modify/Reject만 허용한다. Accept는 1순위 후보를
+  적용 가능 대상으로 기록하고, Modify는 기존 SAFE 대안과 사유를 기록하되 재검증 필요 상태로 둔다.
+  Reject는 사유만 기록한다. 어느 결정도 이 단계에서 Aircraft Runtime을 변경하지 않는다.
+- 근거: Human-in-the-loop Architecture Rule과 일반 충돌 결정 흐름의 승인 전 불변 원칙
+- 제한: 관제 위치 `RKTU-DEMO-CONTROLLER`는 Golden Demo 식별자이며 실제 관제기관 구조가 아니다.
+- 검증: 세 결정 경로, 중복·잘못된 입력 차단, Reset, HTTP 및 실제 Loopback 회귀 테스트
+
 ## 5. Phase별 확정 시점
 
 | Phase | 반드시 확정할 Assumption |

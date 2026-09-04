@@ -448,6 +448,12 @@ Source Exception·Candidate Batch·Validation Run ID, UTC, Ranking Policy와 `AV
 `NO_SAFE_CANDIDATE` 결과를 묶는다. 기존 단일 충돌용 `ResolutionRecommendation`과 별도 모델이며,
 추천 생성 자체는 Controller Decision이나 Runtime 적용이 아니다.
 
+`EmergencyReturnDecisionAuditEntry`는 한 Recommendation Set의 1순위 원 추천, 관제사의
+Accept/Modify/Reject, 선택한 대안, UTC 시각, 관제 위치와 사유를 연결한다. Accept만 후속 적용 권한을
+나타내고 Modify는 재검증 필요 상태이며 Reject는 선택 후보가 없다. `EmergencyReturnDecisionAuditLog`는
+Set당 하나인 최종 결정을 Revision 순서로 보존한다. 두 모델은 기존 단일 기동용 Controller Decision
+Audit과 분리되며 어떤 Candidate Action도 직접 적용하지 않는다.
+
 ## 20. 의도적으로 제외한 모델
 
 다음은 현재 Phase의 책임이 아니므로 아직 구현하지 않는다.

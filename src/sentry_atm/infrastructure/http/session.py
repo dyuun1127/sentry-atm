@@ -122,7 +122,11 @@ class GoldenDemoSessionWsgiApp:
             if not isinstance(command_value, str):
                 raise TypeError("command must be text")
             command = GoldenDemoSessionCommand(command_value)
-            rationale, modified_maneuver = _parse_command_inputs(payload, command)
+            (
+                rationale,
+                modified_maneuver,
+                modified_emergency_candidate_id,
+            ) = _parse_command_inputs(payload, command)
         except KeyError:
             raise _HttpError(
                 HTTPStatus.UNPROCESSABLE_ENTITY,
@@ -140,6 +144,7 @@ class GoldenDemoSessionWsgiApp:
                 command,
                 rationale=rationale,
                 modified_maneuver=modified_maneuver,
+                modified_emergency_candidate_id=modified_emergency_candidate_id,
             )
         except GoldenDemoSessionCommandValidationError as error:
             raise _HttpError(
@@ -171,10 +176,14 @@ class GoldenDemoSessionWsgiApp:
 def _parse_command_inputs(
     payload: dict[str, object],
     command: GoldenDemoSessionCommand,
-) -> tuple[str | None, ResolutionManeuver | None]:
+) -> tuple[str | None, ResolutionManeuver | None, str | None]:
     if command is GoldenDemoSessionCommand.MODIFY_RECOMMENDATION:
         expected_fields = {"command", "rationale", "modified_maneuver"}
     elif command is GoldenDemoSessionCommand.REJECT_RECOMMENDATION:
+        expected_fields = {"command", "rationale"}
+    elif command is GoldenDemoSessionCommand.MODIFY_EMERGENCY_RETURN:
+        expected_fields = {"command", "rationale", "modified_candidate_id"}
+    elif command is GoldenDemoSessionCommand.REJECT_EMERGENCY_RETURN:
         expected_fields = {"command", "rationale"}
     else:
         expected_fields = {"command"}
@@ -186,8 +195,13 @@ def _parse_command_inputs(
     rationale = payload.get("rationale")
     if rationale is not None and not isinstance(rationale, str):
         raise TypeError("rationale must be text")
+    if command is GoldenDemoSessionCommand.MODIFY_EMERGENCY_RETURN:
+        candidate_id = payload["modified_candidate_id"]
+        if not isinstance(candidate_id, str):
+            raise TypeError("modified_candidate_id must be text")
+        return rationale, None, candidate_id
     if command is not GoldenDemoSessionCommand.MODIFY_RECOMMENDATION:
-        return rationale, None
+        return rationale, None, None
     value = payload["modified_maneuver"]
     if not isinstance(value, dict) or set(value) != _MANEUVER_FIELDS:
         raise TypeError("modified_maneuver must contain exactly the fixed Maneuver fields")
@@ -199,7 +213,7 @@ def _parse_command_inputs(
         delay_seconds=value["delay_seconds"],  # type: ignore[arg-type]
         target_sequence_position=value["target_sequence_position"],  # type: ignore[arg-type]
     )
-    return rationale, model.to_domain()
+    return rationale, model.to_domain(), None
 
 
 class _HttpError(Exception):

@@ -20,6 +20,10 @@ from sentry_atm.domain.emergency_return import (
     EmergencyReturnManeuver,
     EmergencyReturnStrategy,
 )
+from sentry_atm.domain.emergency_return_decision import (
+    EmergencyReturnDecisionAuditEntry,
+    EmergencyReturnDecisionAuditLog,
+)
 from sentry_atm.domain.emergency_return_recommendation import (
     EmergencyReturnRecommendation,
     EmergencyReturnRecommendationReasonCode,
@@ -123,6 +127,8 @@ __all__ = [
     "EmergencyReturnCandidate",
     "EmergencyReturnCandidateBatch",
     "EmergencyReturnCandidateValidationResult",
+    "EmergencyReturnDecisionAuditEntry",
+    "EmergencyReturnDecisionAuditLog",
     "EmergencyReturnManeuver",
     "EmergencyReturnRecommendation",
     "EmergencyReturnRecommendationReasonCode",

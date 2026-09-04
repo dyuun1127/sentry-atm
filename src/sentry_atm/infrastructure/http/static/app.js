@@ -65,6 +65,21 @@ const COMMAND_BY_STAGE = {
     code: "EMERGENCY · T+240",
     label: "비상 복귀안 검토 필요",
   },
+  EMERGENCY_DECISION_ACCEPTED: {
+    command: "",
+    code: "AUDIT · ACCEPTED",
+    label: "비상 복귀 승인 기록 완료",
+  },
+  EMERGENCY_DECISION_MODIFIED: {
+    command: "",
+    code: "AUDIT · REVALIDATION REQUIRED",
+    label: "수정 복귀안 기록 완료",
+  },
+  EMERGENCY_DECISION_REJECTED: {
+    command: "",
+    code: "AUDIT · REJECTED",
+    label: "비상 복귀안 거절 기록 완료",
+  },
 };
 
 const elements = {
@@ -100,6 +115,20 @@ const elements = {
   emergencyCandidates: document.querySelector("[data-emergency-candidates]"),
   emergencyCandidateList: document.querySelector("[data-emergency-candidate-list]"),
   emergencyValidationSummary: document.querySelector("[data-emergency-validation-summary]"),
+  emergencyDecisionActions: document.querySelector("[data-emergency-decision-actions]"),
+  emergencyDecisionActionButtons: [
+    ...document.querySelectorAll("[data-emergency-decision-action]"),
+  ],
+  emergencyDecisionForm: document.querySelector("[data-emergency-decision-form]"),
+  emergencyDecisionFormTitle: document.querySelector("[data-emergency-decision-form-title]"),
+  emergencyDecisionCancel: document.querySelector("[data-emergency-decision-cancel]"),
+  emergencyAlternativeField: document.querySelector("[data-emergency-alternative-field]"),
+  emergencyAlternative: document.querySelector("[data-emergency-alternative]"),
+  emergencyRationale: document.querySelector("[data-emergency-rationale]"),
+  emergencyDecisionSubmit: document.querySelector("[data-emergency-decision-submit]"),
+  emergencyDecisionAudit: document.querySelector("[data-emergency-decision-audit]"),
+  emergencyDecisionSummary: document.querySelector("[data-emergency-decision-summary]"),
+  emergencyDecisionRationale: document.querySelector("[data-emergency-decision-rationale]"),
   aircraftLayer: document.querySelector("[data-aircraft-layer]"),
   trailLayer: document.querySelector("[data-trail-layer]"),
   playbackOffset: document.querySelector("[data-playback-offset]"),
@@ -190,6 +219,7 @@ const elements = {
 let currentSession = null;
 let requestBusy = false;
 let decisionMode = null;
+let emergencyDecisionMode = null;
 let playback = null;
 let playbackAnimationId = null;
 let playbackStartTime = null;
@@ -436,8 +466,16 @@ function isDecisionCueBlocking() {
   const activeCue = cueAtOrBefore(playbackCurrentOffset);
   return Boolean(
     activeCue?.requires_operator_action
-      && activeCue.cue_type === "RECOMMENDATION_AVAILABLE"
-      && currentSession?.stage === "RECOMMENDATION_AVAILABLE",
+      && (
+        (
+          activeCue.cue_type === "RECOMMENDATION_AVAILABLE"
+          && currentSession?.stage === "RECOMMENDATION_AVAILABLE"
+        )
+        || (
+          activeCue.cue_type === "EMERGENCY_DECLARED"
+          && currentSession?.stage === "EMERGENCY_DECLARED"
+        )
+      ),
   );
 }
 
@@ -742,14 +780,14 @@ function emergencyActionText(action) {
   return `${action.aircraft_id} → ${action.maneuver_type}`;
 }
 
-function renderEmergencyReturnCandidates(batch) {
+function renderEmergencyReturnCandidates(batch, decision, stage) {
   const candidates = Array.isArray(batch?.candidates) ? batch.candidates : [];
   elements.emergencyCandidates.hidden = candidates.length === 0;
   elements.emergencyCandidateList.replaceChildren();
   const safeCount = candidates.filter((item) => item.verdict === "SAFE").length;
   elements.emergencyValidationSummary.textContent = candidates.length > 0
     ? `PRIMARY ${batch.primary_recommendation_candidate_id ?? "NONE"} · ${safeCount} SAFE · `
-      + "CONTROLLER DECISION REQUIRED · NOT APPLIED"
+      + `${decision ? `${decision.decision_type} AUDITED` : "CONTROLLER DECISION REQUIRED"} · NOT APPLIED`
     : "ISOLATED VALIDATION · NOT APPLIED";
   for (const candidate of candidates) {
     const card = document.createElement("article");
@@ -820,6 +858,48 @@ function renderEmergencyReturnCandidates(batch) {
     );
     elements.emergencyCandidateList.append(card);
   }
+  const awaitingDecision = stage === "EMERGENCY_DECLARED" && !decision;
+  elements.emergencyDecisionActions.hidden = !awaitingDecision;
+  elements.emergencyDecisionAudit.hidden = !decision;
+  if (!awaitingDecision && emergencyDecisionMode) {
+    setEmergencyDecisionMode(null);
+  }
+  elements.emergencyAlternative.replaceChildren();
+  for (const candidate of candidates.filter(
+    (item) => item.recommended && item.recommendation_rank > 1,
+  )) {
+    const option = document.createElement("option");
+    option.value = candidate.candidate_id;
+    option.textContent = `${candidate.candidate_id} · RANK ${candidate.recommendation_rank} · ${candidate.strategy}`;
+    elements.emergencyAlternative.append(option);
+  }
+  if (decision) {
+    const selected = decision.selected_candidate_id ?? "NO PLAN";
+    elements.emergencyDecisionSummary.textContent = `${decision.decision_type} · ${selected}`;
+    elements.emergencyDecisionRationale.textContent = decision.rationale
+      ?? "Primary recommendation accepted without modification.";
+  }
+}
+
+function setEmergencyDecisionMode(mode) {
+  emergencyDecisionMode = mode;
+  elements.emergencyDecisionForm.hidden = !mode;
+  if (!mode) {
+    elements.emergencyDecisionForm.reset();
+    return;
+  }
+  const modifying = mode === "MODIFY";
+  elements.emergencyAlternativeField.hidden = !modifying;
+  elements.emergencyDecisionFormTitle.textContent = modifying
+    ? "SAFE 비상 복귀 대안 선택"
+    : "비상 복귀 추천 거절";
+  elements.emergencyDecisionSubmit.textContent = modifying
+    ? "수정 결정 기록"
+    : "거절 결정 기록";
+  elements.emergencyRationale.placeholder = modifying
+    ? "1순위 대신 SAFE 대안을 선택하는 이유를 입력하세요."
+    : "비상 복귀 추천 묶음을 거절하는 이유를 입력하세요.";
+  elements.emergencyRationale.focus();
 }
 
 function renderExceptionQueue(queue) {
@@ -1241,6 +1321,10 @@ function setRequestBusy(value) {
   for (const button of elements.decisionActionButtons) {
     button.disabled = value;
   }
+  for (const button of elements.emergencyDecisionActionButtons) {
+    button.disabled = value;
+  }
+  elements.emergencyDecisionSubmit.disabled = value;
   elements.primaryCommand.setAttribute("aria-busy", String(value));
   if (currentSession) {
     updateCommandControl(currentSession);
@@ -1254,6 +1338,9 @@ function renderStage(stage) {
     DECISION_MODIFIED: "DECISION_ACCEPTED",
     MODIFICATION_REVALIDATED: "DECISION_ACCEPTED",
     DECISION_REJECTED: "DECISION_ACCEPTED",
+    EMERGENCY_DECISION_ACCEPTED: "EMERGENCY_DECLARED",
+    EMERGENCY_DECISION_MODIFIED: "EMERGENCY_DECLARED",
+    EMERGENCY_DECISION_REJECTED: "EMERGENCY_DECLARED",
   }[stage] ?? stage;
   const currentIndex = STAGE_ORDER.indexOf(normalized);
   for (const item of elements.stageItems) {
@@ -1285,7 +1372,11 @@ function renderSession(session) {
   renderTrafficTable(traffic);
   renderDeviation(session.deviation);
   renderEmergency(session.emergency);
-  renderEmergencyReturnCandidates(session.emergency_return_candidates);
+  renderEmergencyReturnCandidates(
+    session.emergency_return_candidates,
+    session.emergency_return_decision,
+    session.stage,
+  );
   renderStage(String(session.stage ?? "READY"));
   renderExceptionQueue(session.exception_queue);
   renderDecisionSupport(session);
@@ -1491,6 +1582,35 @@ elements.decisionForm.addEventListener("submit", (event) => {
     });
   } else {
     executeCommand("REJECT_RECOMMENDATION", { rationale });
+  }
+});
+for (const button of elements.emergencyDecisionActionButtons) {
+  button.addEventListener("click", () => {
+    const action = button.dataset.emergencyDecisionAction;
+    if (action === "ACCEPT") {
+      executeCommand("ACCEPT_EMERGENCY_RETURN");
+    } else {
+      setEmergencyDecisionMode(action);
+    }
+  });
+}
+elements.emergencyDecisionCancel.addEventListener(
+  "click",
+  () => setEmergencyDecisionMode(null),
+);
+elements.emergencyDecisionForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  if (!emergencyDecisionMode || !elements.emergencyDecisionForm.reportValidity()) {
+    return;
+  }
+  const rationale = elements.emergencyRationale.value.trim();
+  if (emergencyDecisionMode === "MODIFY") {
+    executeCommand("MODIFY_EMERGENCY_RETURN", {
+      rationale,
+      modified_candidate_id: elements.emergencyAlternative.value,
+    });
+  } else {
+    executeCommand("REJECT_EMERGENCY_RETURN", { rationale });
   }
 });
 elements.resetCommand.addEventListener("click", () => executeCommand("RESET"));

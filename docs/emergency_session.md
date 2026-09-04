@@ -5,8 +5,8 @@
 Phase 18-A는 해결된 Golden Demo Run을 T+90에서 T+240으로 진행하고, 기존 Synthetic
 `EVT-MIL-T01-EMERGENCY`를 Session·Exception Queue·Web UI에 동일한 Checkpoint로 노출한다.
 Phase 18-B는 이 비상 증거에서 조정 후보를 생성하고 Phase 18-C는 각 후보를 원 Traffic의 복사본에서
-격리 검증한다. Phase 18-D는 검증된 안전 후보만 결정론적으로 정렬한다. 관제사 결정·적용은 이 단계의
-범위가 아니다.
+격리 검증한다. Phase 18-D는 검증된 안전 후보만 결정론적으로 정렬하고, Phase 18-E는 관제사의
+Accept/Modify/Reject를 별도 Audit으로 기록한다. 실제 적용은 후속 단계의 범위다.
 
 ## 2. 결정론적 전환
 
@@ -111,3 +111,16 @@ Golden Demo에서는 `ER-CAND-B`가 비용 5·지연 0초로 1순위, `ER-CAND-A
 Session API는 Recommendation Set ID, Ranking Policy ID, Availability, Primary Candidate ID와 후보별
 Rank·설명을 기존 `emergency_return_candidates` 증거 묶음에 추가한다. UI의 Primary 표시는 실행 명령이
 아니며, 추천 조회 전후 Clock·Traffic·Queue·Audit과 Aircraft Runtime은 동일해야 한다.
+
+## 9. Phase 18-E 비상 복귀 결정과 Audit
+
+T+240 `EMERGENCY_DECLARED`에서 관제사는 추천 묶음당 한 번만 다음 결정을 내릴 수 있다.
+
+- `ACCEPT_EMERGENCY_RETURN`: 1순위 `ER-CAND-B`를 선택하고 적용 권한을 기록한다.
+- `MODIFY_EMERGENCY_RETURN`: 이미 `SAFE`인 비주 후보(데모에서는 `ER-CAND-A`)와 사유를 기록하며,
+  적용 전에 다시 검증해야 하는 상태로 둔다.
+- `REJECT_EMERGENCY_RETURN`: 거절 사유를 기록하고 선택 후보를 두지 않는다.
+
+Audit은 원 추천·선택 추천/후보, 관제 위치, UTC 결정 시각, 사유, 적용 권한과 재검증 필요 여부를
+보존한다. 세 결정 모두 T+240 Clock, Traffic, Exception Queue 및 Aircraft Runtime을 변경하지 않으며
+응답의 `applied`는 항상 `false`다. Reset은 이 process-local Audit도 함께 제거한다.

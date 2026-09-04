@@ -10,16 +10,18 @@ Application을 실행하지 않는다.
 
 `GoldenDemoSessionStage`는 완료된 증거를 다음 우선순위로 평가한다.
 
-1. 최신 Step에 EMERGENCY Priority 존재 → `EMERGENCY_DECLARED`
-2. Application Result 존재 → `CONFLICT_RESOLVED`
-3. Modified Maneuver Revalidation Result 존재 → `MODIFICATION_REVALIDATED`
-4. Controller Decision Result 존재 → Decision Type에 따라 `DECISION_ACCEPTED`,
+1. Emergency Return Decision 존재 → Decision Type에 따라
+   `EMERGENCY_DECISION_ACCEPTED`, `EMERGENCY_DECISION_MODIFIED`, `EMERGENCY_DECISION_REJECTED`
+2. 최신 Step에 EMERGENCY Priority 존재 → `EMERGENCY_DECLARED`
+3. Application Result 존재 → `CONFLICT_RESOLVED`
+4. Modified Maneuver Revalidation Result 존재 → `MODIFICATION_REVALIDATED`
+5. Controller Decision Result 존재 → Decision Type에 따라 `DECISION_ACCEPTED`,
    `DECISION_MODIFIED`, `DECISION_REJECTED`
-5. Resolution Result 존재 → `RECOMMENDATION_AVAILABLE`
-6. 최신 Step에 HIGH/CRITICAL Risk 존재 → `CONFLICT_DETECTED`
-7. 최신 Step에 ROUTINE이 아닌 Priority 존재 → `DEVIATION_DETECTED`
-8. Step 존재 → `MONITORING`
-9. Step 없음 → `READY`
+6. Resolution Result 존재 → `RECOMMENDATION_AVAILABLE`
+7. 최신 Step에 HIGH/CRITICAL Risk 존재 → `CONFLICT_DETECTED`
+8. 최신 Step에 ROUTINE이 아닌 Priority 존재 → `DEVIATION_DETECTED`
+9. Step 존재 → `MONITORING`
+10. Step 없음 → `READY`
 
 단계는 별도로 수정하거나 저장하지 않으므로 실제 backend evidence보다 앞선 화면 상태를 만들 수 없다.
 
@@ -66,6 +68,9 @@ Revalidation은 비어 있다.
 | `REJECT_RECOMMENDATION` | `RECOMMENDATION_AVAILABLE`, T+75 | `DECISION_REJECTED`, T+90 |
 | `APPLY_APPROVED_MANEUVER` | `DECISION_ACCEPTED`, T+90 | `CONFLICT_RESOLVED`, T+90 |
 | `ADVANCE_TO_EMERGENCY` | `CONFLICT_RESOLVED`, T+90 | `EMERGENCY_DECLARED`, T+240 |
+| `ACCEPT_EMERGENCY_RETURN` | `EMERGENCY_DECLARED`, T+240 | `EMERGENCY_DECISION_ACCEPTED`, T+240 |
+| `MODIFY_EMERGENCY_RETURN` | `EMERGENCY_DECLARED`, T+240 | `EMERGENCY_DECISION_MODIFIED`, T+240 |
+| `REJECT_EMERGENCY_RETURN` | `EMERGENCY_DECLARED`, T+240 | `EMERGENCY_DECISION_REJECTED`, T+240 |
 | `RESET` | 모든 Stage | 새 `READY`, T+0 Run |
 
 서비스는 caller가 임의 `advance_steps`를 전달하게 하지 않는다. `MODIFY`는 Rationale과 원 추천과 다른
@@ -83,7 +88,9 @@ Read API와 Command Service를 하나의 독립된 process-local Container로 �
 - `GET /api/v1/golden-demo/session`: 현재 Session JSON, 항상 `200 OK`
 - `POST /api/v1/golden-demo/session/commands`: `{"command":"START"}` 형태의 고정 Command 실행 후
   새 Session JSON, 성공 시 `200 OK`. 일반 명령과 `ACCEPT`는 `command`만, `MODIFY`는 `rationale`과
-  고정 `modified_maneuver` Schema, `REJECT`는 `rationale`을 추가로 요구한다.
+  고정 `modified_maneuver` Schema, `REJECT`는 `rationale`을 추가로 요구한다. 비상 `ACCEPT`는
+  `command`만, 비상 `MODIFY`는 `rationale`과 `modified_candidate_id`, 비상 `REJECT`는
+  `rationale`을 요구한다.
 
 두 Endpoint는 Query를 거부한다. POST는 `application/json`, 정확한 Content-Length, UTF-8 JSON Object,
 정확히 하나의 `command` 필드와 16 KiB Body 제한을 검증한다. 응답 JSON은 Key를 정렬하고 공백을

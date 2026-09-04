@@ -157,6 +157,95 @@ def _post_to_recommendation(session) -> None:
         assert _post(session.http_app, command)[0] == 200
 
 
+def _post_to_emergency(session) -> None:
+    for command in (
+        "START",
+        "ADVANCE_TO_CONFLICT",
+        "GENERATE_RECOMMENDATION",
+        "ACCEPT_RECOMMENDATION",
+        "APPLY_APPROVED_MANEUVER",
+        "ADVANCE_TO_EMERGENCY",
+    ):
+        assert _post(session.http_app, command)[0] == 200
+
+
+@pytest.mark.parametrize(
+    ("command", "fields", "stage", "selected_candidate_id"),
+    [
+        (
+            "ACCEPT_EMERGENCY_RETURN",
+            None,
+            "EMERGENCY_DECISION_ACCEPTED",
+            "ER-CAND-B",
+        ),
+        (
+            "MODIFY_EMERGENCY_RETURN",
+            {
+                "rationale": "Prefer protected priority-first recovery",
+                "modified_candidate_id": "ER-CAND-A",
+            },
+            "EMERGENCY_DECISION_MODIFIED",
+            "ER-CAND-A",
+        ),
+        (
+            "REJECT_EMERGENCY_RETURN",
+            {"rationale": "Coordinate a manual recovery plan"},
+            "EMERGENCY_DECISION_REJECTED",
+            None,
+        ),
+    ],
+)
+def test_emergency_return_http_decisions_return_non_applying_audit(
+    command,
+    fields,
+    stage,
+    selected_candidate_id,
+) -> None:
+    session = build_golden_demo_session_runtime()
+    _post_to_emergency(session)
+    traffic_before = session.runtime.simulation.engine.snapshot()
+
+    status, _, body = _post(session.http_app, command, fields=fields)
+    payload = json.loads(body)
+
+    assert status == 200
+    assert payload["stage"] == stage
+    assert payload["elapsed_seconds"] == 240.0
+    audit = payload["emergency_return_decision"]
+    assert audit["decision_type"] == command.split("_", maxsplit=1)[0]
+    assert audit["source_candidate_id"] == "ER-CAND-B"
+    assert audit["selected_candidate_id"] == selected_candidate_id
+    assert audit["applied"] is False
+    assert session.runtime.simulation.engine.snapshot() == traffic_before
+
+
+@pytest.mark.parametrize(
+    ("command", "fields"),
+    [
+        ("MODIFY_EMERGENCY_RETURN", {"rationale": "", "modified_candidate_id": "ER-CAND-A"}),
+        (
+            "MODIFY_EMERGENCY_RETURN",
+            {"rationale": "Unknown option", "modified_candidate_id": "UNKNOWN"},
+        ),
+        (
+            "MODIFY_EMERGENCY_RETURN",
+            {"rationale": "No actual change", "modified_candidate_id": "ER-CAND-B"},
+        ),
+        ("REJECT_EMERGENCY_RETURN", {"rationale": ""}),
+    ],
+)
+def test_invalid_emergency_return_http_decision_is_atomic(command, fields) -> None:
+    session = build_golden_demo_session_runtime()
+    _post_to_emergency(session)
+    before = session.read_api.get_current()
+
+    status, _, body = _post(session.http_app, command, fields=fields)
+
+    assert status == 422
+    assert json.loads(body)["error"]["code"] == "INVALID_REQUEST"
+    assert session.read_api.get_current() == before
+
+
 def test_modify_command_accepts_fixed_maneuver_schema_and_returns_audit() -> None:
     session = build_golden_demo_session_runtime()
     _post_to_recommendation(session)

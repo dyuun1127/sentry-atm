@@ -119,6 +119,7 @@ class GoldenDemoStepOrchestrator:
         self._runtime.exception_queue_service.reset()
         self._runtime.recommendation_catalog.reset()
         self._runtime.controller_decision_service.reset()
+        self._runtime.emergency_return_decision_service.reset()
         self._last_tick_count = None
         self._last_result = None
         self._observed_reset_count = reset_count

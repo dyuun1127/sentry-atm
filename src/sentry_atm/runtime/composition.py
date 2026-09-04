@@ -13,7 +13,10 @@ from sentry_atm.conflict import (
     PairwiseConflictDetector,
     RollingConflictScheduler,
 )
-from sentry_atm.controller_decision import DeterministicControllerDecisionService
+from sentry_atm.controller_decision import (
+    DeterministicControllerDecisionService,
+    DeterministicEmergencyReturnDecisionService,
+)
 from sentry_atm.domain import AircraftPerformanceProfile, ResolutionRecommendationSet
 from sentry_atm.domain.validation import require_identifier
 from sentry_atm.exception_queue import ExceptionQueueService
@@ -118,6 +121,7 @@ class GoldenDemoRuntime:
     emergency_return_recommendation_service: (
         DeterministicEmergencyReturnRecommendationRankingService
     )
+    emergency_return_decision_service: DeterministicEmergencyReturnDecisionService
     safety_validator: IsolatedResolutionSafetyValidator
     recommendation_service: DeterministicRecommendationRankingService
     recommendation_catalog: InMemoryRecommendationCatalog
@@ -182,6 +186,7 @@ def build_golden_demo_runtime() -> GoldenDemoRuntime:
         emergency_return_recommendation_service=(
             DeterministicEmergencyReturnRecommendationRankingService()
         ),
+        emergency_return_decision_service=DeterministicEmergencyReturnDecisionService(),
         safety_validator=IsolatedResolutionSafetyValidator(),
         recommendation_service=DeterministicRecommendationRankingService(),
         recommendation_catalog=recommendation_catalog,

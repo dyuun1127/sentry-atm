@@ -612,6 +612,45 @@ h1 {
   color: var(--amber);
 }
 
+.emergency-decision {
+  padding: 0 20px 18px;
+  border-top: 1px solid var(--line);
+}
+
+.emergency-decision .decision-actions {
+  max-width: 720px;
+  margin: 18px auto 0;
+}
+
+.emergency-decision .decision-form {
+  max-width: 720px;
+  margin-right: auto;
+  margin-left: auto;
+}
+
+.emergency-decision-audit {
+  max-width: 720px;
+  margin: 18px auto 0;
+  padding: 13px;
+  display: grid;
+  gap: 6px;
+  border: 1px solid rgba(113, 227, 172, 0.36);
+  background: rgba(113, 227, 172, 0.045);
+}
+
+.emergency-decision-audit span,
+.emergency-decision-audit small {
+  color: var(--faint);
+  font-family: var(--mono);
+  font-size: 8px;
+}
+
+.emergency-decision-audit strong {
+  color: var(--green-bright);
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
 .deviation-panel > header {
   min-height: 112px;
   padding: 20px 24px;

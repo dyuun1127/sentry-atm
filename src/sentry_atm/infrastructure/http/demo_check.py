@@ -285,6 +285,39 @@ def run_golden_demo_regression(
             )
         )
 
+        emergency_decided = _post_command(connection, "ACCEPT_EMERGENCY_RETURN")
+        _require_session(
+            emergency_decided,
+            expected_stage="EMERGENCY_DECISION_ACCEPTED",
+            expected_elapsed=240.0,
+        )
+        emergency_audit = _mapping(
+            emergency_decided,
+            "emergency_return_decision",
+        )
+        _require(
+            emergency_audit.get("decision_type") == "ACCEPT"
+            and emergency_audit.get("source_candidate_id") == "ER-CAND-B"
+            and emergency_audit.get("selected_candidate_id") == "ER-CAND-B",
+            "Emergency Return decision must accept the primary ER-CAND-B plan",
+        )
+        _require(
+            emergency_audit.get("authorizes_application") is True
+            and emergency_audit.get("applied") is False,
+            "Emergency Return ACCEPT must be audited but not applied in Phase 18-E",
+        )
+        _require(
+            _aircraft(emergency_decided, "MIL-T01").get("emergency_status") == "NONE",
+            "Emergency Return decision must not mutate Aircraft Runtime",
+        )
+        checkpoints.append(
+            _checkpoint(
+                "EMERGENCY_DECISION",
+                emergency_decided,
+                "ACCEPT ER-CAND-B audited | runtime not applied",
+            )
+        )
+
         reset = _post_command(connection, "RESET")
         _require_session(reset, expected_stage="READY", expected_elapsed=0.0)
         _require(reset.get("run_number") == 1, "reset must increment the Run number")

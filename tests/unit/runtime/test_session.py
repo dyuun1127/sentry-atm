@@ -319,6 +319,79 @@ def test_resolved_session_advances_to_emergency_checkpoint_without_applying_runt
     assert session.read_api.get_current() == unchanged
 
 
+def _advance_to_emergency(session) -> None:
+    for command in (*_FULL_SEQUENCE, GoldenDemoSessionCommand.ADVANCE_TO_EMERGENCY):
+        session.command_service.execute(command)
+
+
+@pytest.mark.parametrize(
+    ("command", "kwargs", "stage", "selected_candidate_id"),
+    [
+        (
+            GoldenDemoSessionCommand.ACCEPT_EMERGENCY_RETURN,
+            {},
+            GoldenDemoSessionStage.EMERGENCY_DECISION_ACCEPTED,
+            "ER-CAND-B",
+        ),
+        (
+            GoldenDemoSessionCommand.MODIFY_EMERGENCY_RETURN,
+            {
+                "rationale": "Prefer protected priority-first recovery",
+                "modified_emergency_candidate_id": "ER-CAND-A",
+            },
+            GoldenDemoSessionStage.EMERGENCY_DECISION_MODIFIED,
+            "ER-CAND-A",
+        ),
+        (
+            GoldenDemoSessionCommand.REJECT_EMERGENCY_RETURN,
+            {"rationale": "Coordinate a manual recovery plan"},
+            GoldenDemoSessionStage.EMERGENCY_DECISION_REJECTED,
+            None,
+        ),
+    ],
+)
+def test_emergency_return_decisions_record_audit_without_runtime_application(
+    command,
+    kwargs,
+    stage,
+    selected_candidate_id,
+) -> None:
+    session = build_golden_demo_session_runtime()
+    _advance_to_emergency(session)
+    traffic_before = session.runtime.simulation.engine.snapshot()
+
+    decided = session.command_service.execute(command, **kwargs)
+
+    assert decided.stage is stage
+    assert decided.elapsed_seconds == 240.0
+    assert decided.emergency_return_decision is not None
+    audit = decided.emergency_return_decision
+    assert audit.source_candidate_id == "ER-CAND-B"
+    assert audit.selected_candidate_id == selected_candidate_id
+    assert audit.authorizes_application is (
+        command is GoldenDemoSessionCommand.ACCEPT_EMERGENCY_RETURN
+    )
+    assert audit.requires_revalidation is (
+        command is GoldenDemoSessionCommand.MODIFY_EMERGENCY_RETURN
+    )
+    assert session.runtime.simulation.engine.snapshot() == traffic_before
+
+    with pytest.raises(ValueError, match="EMERGENCY_DECLARED"):
+        session.command_service.execute(command, **kwargs)
+
+
+def test_reset_clears_emergency_return_decision_audit() -> None:
+    session = build_golden_demo_session_runtime()
+    _advance_to_emergency(session)
+    session.command_service.execute(GoldenDemoSessionCommand.ACCEPT_EMERGENCY_RETURN)
+
+    reset = session.command_service.execute(GoldenDemoSessionCommand.RESET)
+
+    assert reset.stage is GoldenDemoSessionStage.READY
+    assert reset.emergency_return_decision is None
+    assert session.runtime.emergency_return_decision_service.last_audit_log is None
+
+
 def test_command_rejects_clock_drift_before_advancing_checkpoint() -> None:
     session = build_golden_demo_session_runtime()
     session.command_service.execute(GoldenDemoSessionCommand.START)

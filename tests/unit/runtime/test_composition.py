@@ -132,6 +132,7 @@ def test_composition_wires_one_shared_clock_and_all_core_services() -> None:
     )
     assert runtime.safety_validator.profile.profile_id == "POC_SAFETY_V1"
     assert runtime.recommendation_service.profile.profile_id == "POC_RECOMMENDATION_V1"
+    assert runtime.emergency_return_decision_service.last_audit_log is None
 
 
 def test_composition_connects_catalog_services_apis_and_http_adapters() -> None:
@@ -178,6 +179,10 @@ def test_repeated_builds_are_equal_at_boundary_but_have_independent_state() -> N
     assert first.exception_queue_service is not second.exception_queue_service
     assert first.recommendation_catalog is not second.recommendation_catalog
     assert first.controller_decision_service is not second.controller_decision_service
+    assert (
+        first.emergency_return_decision_service
+        is not second.emergency_return_decision_service
+    )
 
     first.simulation.clock.play()
     first.simulation.engine.tick(steps=5)

@@ -11,6 +11,7 @@ from sentry_atm.api import (
 )
 from sentry_atm.domain import (
     AltitudeManeuver,
+    ControllerDecisionType,
     EntryDelayManeuver,
     HeadingManeuver,
     ResolutionManeuver,
@@ -116,6 +117,7 @@ class GoldenDemoSessionCommandService:
         *,
         rationale: str | None = None,
         modified_maneuver: ResolutionManeuver | None = None,
+        modified_emergency_candidate_id: str | None = None,
     ) -> GoldenDemoSessionReadModel:
         """Execute one validated checkpoint and return its resulting Session view."""
 
@@ -136,6 +138,7 @@ class GoldenDemoSessionCommandService:
             selected,
             rationale=rationale,
             modified_maneuver=modified_maneuver,
+            modified_emergency_candidate_id=modified_emergency_candidate_id,
             current=current,
         )
 
@@ -212,6 +215,44 @@ class GoldenDemoSessionCommandService:
                 elapsed_seconds=90.0,
             )
             steps.step(150)
+        elif selected in {
+            GoldenDemoSessionCommand.ACCEPT_EMERGENCY_RETURN,
+            GoldenDemoSessionCommand.MODIFY_EMERGENCY_RETURN,
+            GoldenDemoSessionCommand.REJECT_EMERGENCY_RETURN,
+        }:
+            _require_checkpoint(
+                current,
+                GoldenDemoSessionStage.EMERGENCY_DECLARED,
+                elapsed_seconds=240.0,
+            )
+            recommendation_set = self._read_api.get_emergency_return_recommendation_set()
+            if recommendation_set is None:  # pragma: no cover - checkpoint invariant
+                raise ValueError("Emergency Return Recommendation Set is unavailable")
+            modified_recommendation_id = None
+            if modified_emergency_candidate_id is not None:
+                modified_recommendation_id = next(
+                    item.recommendation_id
+                    for item in recommendation_set.recommendations
+                    if item.candidate_id == modified_emergency_candidate_id
+                )
+            runtime.emergency_return_decision_service.decide(
+                recommendation_set,
+                {
+                    GoldenDemoSessionCommand.ACCEPT_EMERGENCY_RETURN: (
+                        ControllerDecisionType.ACCEPT
+                    ),
+                    GoldenDemoSessionCommand.MODIFY_EMERGENCY_RETURN: (
+                        ControllerDecisionType.MODIFY
+                    ),
+                    GoldenDemoSessionCommand.REJECT_EMERGENCY_RETURN: (
+                        ControllerDecisionType.REJECT
+                    ),
+                }[selected],
+                decided_at_utc=runtime.simulation.clock.current_time_utc,
+                controller_position_id="RKTU-DEMO-CONTROLLER",
+                rationale=rationale,
+                modified_recommendation_id=modified_recommendation_id,
+            )
         else:  # pragma: no cover - exhaustive StrEnum dispatch
             raise AssertionError(f"unsupported Session command: {selected.value}")
         return self._read_api.get_current()
@@ -244,6 +285,7 @@ def _validate_command_inputs(
     *,
     rationale: str | None,
     modified_maneuver: ResolutionManeuver | None,
+    modified_emergency_candidate_id: str | None,
     current: GoldenDemoSessionReadModel,
 ) -> None:
     decision_commands = {
@@ -251,12 +293,68 @@ def _validate_command_inputs(
         GoldenDemoSessionCommand.MODIFY_RECOMMENDATION,
         GoldenDemoSessionCommand.REJECT_RECOMMENDATION,
     }
-    if command not in decision_commands:
-        if rationale is not None or modified_maneuver is not None:
+    emergency_commands = {
+        GoldenDemoSessionCommand.ACCEPT_EMERGENCY_RETURN,
+        GoldenDemoSessionCommand.MODIFY_EMERGENCY_RETURN,
+        GoldenDemoSessionCommand.REJECT_EMERGENCY_RETURN,
+    }
+    if command not in decision_commands | emergency_commands:
+        if (
+            rationale is not None
+            or modified_maneuver is not None
+            or modified_emergency_candidate_id is not None
+        ):
             raise GoldenDemoSessionCommandValidationError(
                 "decision inputs are only allowed for Recommendation decisions"
             )
         return
+    if command in emergency_commands:
+        if modified_maneuver is not None:
+            raise GoldenDemoSessionCommandValidationError(
+                "Emergency Return decisions cannot contain a modified Maneuver"
+            )
+        if command is GoldenDemoSessionCommand.ACCEPT_EMERGENCY_RETURN:
+            if rationale is not None or modified_emergency_candidate_id is not None:
+                raise GoldenDemoSessionCommandValidationError(
+                    "ACCEPT_EMERGENCY_RETURN does not accept decision inputs"
+                )
+            return
+        try:
+            require_identifier(rationale, field_name="rationale")  # type: ignore[arg-type]
+        except (TypeError, ValueError) as error:
+            raise GoldenDemoSessionCommandValidationError(str(error)) from None
+        if command is GoldenDemoSessionCommand.REJECT_EMERGENCY_RETURN:
+            if modified_emergency_candidate_id is not None:
+                raise GoldenDemoSessionCommandValidationError(
+                    "REJECT_EMERGENCY_RETURN cannot select a candidate"
+                )
+            return
+        try:
+            candidate_id = require_identifier(
+                modified_emergency_candidate_id,
+                field_name="modified_emergency_candidate_id",
+            )
+        except (TypeError, ValueError) as error:
+            raise GoldenDemoSessionCommandValidationError(str(error)) from None
+        batch = current.emergency_return_candidates
+        available_ids = (
+            {item.candidate_id for item in batch.candidates}
+            if batch is not None
+            else set()
+        )
+        if candidate_id not in available_ids:
+            raise GoldenDemoSessionCommandValidationError(
+                "modified_emergency_candidate_id is not an available candidate"
+            )
+        if batch is not None and candidate_id == batch.primary_recommendation_candidate_id:
+            raise GoldenDemoSessionCommandValidationError(
+                "MODIFY_EMERGENCY_RETURN must select a non-primary candidate"
+            )
+        return
+    if modified_emergency_candidate_id is not None:
+        raise GoldenDemoSessionCommandValidationError(
+            "standard Recommendation decisions cannot select an Emergency Return candidate"
+        )
     if command is GoldenDemoSessionCommand.ACCEPT_RECOMMENDATION:
         if rationale is not None or modified_maneuver is not None:
             raise GoldenDemoSessionCommandValidationError(

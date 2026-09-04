@@ -18,6 +18,7 @@ from sentry_atm.domain import (
     ConflictStatus,
     ControllerDecisionType,
     EmergencyReturnCandidateBatch,
+    EmergencyReturnDecisionAuditLog,
     EmergencyReturnRecommendationSet,
     EmergencyReturnSafetyValidationRun,
     EntryDelayManeuver,
@@ -72,6 +73,9 @@ class GoldenDemoSessionStage(StrEnum):
     DECISION_REJECTED = "DECISION_REJECTED"
     CONFLICT_RESOLVED = "CONFLICT_RESOLVED"
     EMERGENCY_DECLARED = "EMERGENCY_DECLARED"
+    EMERGENCY_DECISION_ACCEPTED = "EMERGENCY_DECISION_ACCEPTED"
+    EMERGENCY_DECISION_MODIFIED = "EMERGENCY_DECISION_MODIFIED"
+    EMERGENCY_DECISION_REJECTED = "EMERGENCY_DECISION_REJECTED"
 
 
 class GoldenDemoSessionCommand(StrEnum):
@@ -87,6 +91,9 @@ class GoldenDemoSessionCommand(StrEnum):
     REJECT_RECOMMENDATION = "REJECT_RECOMMENDATION"
     APPLY_APPROVED_MANEUVER = "APPLY_APPROVED_MANEUVER"
     ADVANCE_TO_EMERGENCY = "ADVANCE_TO_EMERGENCY"
+    ACCEPT_EMERGENCY_RETURN = "ACCEPT_EMERGENCY_RETURN"
+    MODIFY_EMERGENCY_RETURN = "MODIFY_EMERGENCY_RETURN"
+    REJECT_EMERGENCY_RETURN = "REJECT_EMERGENCY_RETURN"
     RESET = "RESET"
 
 
@@ -418,6 +425,45 @@ class GoldenDemoEmergencyReturnBatchReadModel:
 
 
 @dataclass(frozen=True, slots=True)
+class GoldenDemoEmergencyReturnDecisionReadModel:
+    """JSON-ready audit evidence for one Emergency Return controller decision."""
+
+    audit_log_id: str
+    revision: int
+    decision_id: str
+    recommendation_set_id: str
+    source_recommendation_id: str
+    source_candidate_id: str
+    selected_recommendation_id: str | None
+    selected_candidate_id: str | None
+    decision_type: str
+    decided_at_utc: str
+    controller_position_id: str
+    rationale: str | None
+    authorizes_application: bool
+    requires_revalidation: bool
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "audit_log_id": self.audit_log_id,
+            "revision": self.revision,
+            "decision_id": self.decision_id,
+            "recommendation_set_id": self.recommendation_set_id,
+            "source_recommendation_id": self.source_recommendation_id,
+            "source_candidate_id": self.source_candidate_id,
+            "selected_recommendation_id": self.selected_recommendation_id,
+            "selected_candidate_id": self.selected_candidate_id,
+            "decision_type": self.decision_type,
+            "decided_at_utc": self.decided_at_utc,
+            "controller_position_id": self.controller_position_id,
+            "rationale": self.rationale,
+            "authorizes_application": self.authorizes_application,
+            "requires_revalidation": self.requires_revalidation,
+            "applied": False,
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class GoldenDemoCandidateComparisonReadModel:
     """One candidate joined with its isolated Safety Validation evidence."""
 
@@ -532,6 +578,7 @@ class GoldenDemoSessionReadModel:
     deviation: GoldenDemoDeviationReadModel | None
     emergency: GoldenDemoEmergencyReadModel | None
     emergency_return_candidates: GoldenDemoEmergencyReturnBatchReadModel | None
+    emergency_return_decision: GoldenDemoEmergencyReturnDecisionReadModel | None
     candidate_comparisons: tuple[GoldenDemoCandidateComparisonReadModel, ...]
     exception_queue: ExceptionQueueSnapshotReadModel | None
     recommendation: ResolutionRecommendationSetReadModel | None
@@ -562,6 +609,11 @@ class GoldenDemoSessionReadModel:
             "emergency_return_candidates": (
                 self.emergency_return_candidates.to_dict()
                 if self.emergency_return_candidates is not None
+                else None
+            ),
+            "emergency_return_decision": (
+                self.emergency_return_decision.to_dict()
+                if self.emergency_return_decision is not None
                 else None
             ),
             "candidate_comparisons": [
@@ -608,6 +660,7 @@ class GoldenDemoSessionCommandApiContract(Protocol):
         *,
         rationale: str | None = None,
         modified_maneuver: ResolutionManeuver | None = None,
+        modified_emergency_candidate_id: str | None = None,
     ) -> GoldenDemoSessionReadModel: ...
 
 
@@ -738,6 +791,9 @@ class InProcessGoldenDemoSessionApi:
         )
         recommendation = runtime.recommendation_api.get_current()
         controller_decision = runtime.controller_decision_api.get_current()
+        emergency_return_decision = _map_emergency_return_decision(
+            runtime.emergency_return_decision_service.last_audit_log
+        )
         return GoldenDemoSessionReadModel(
             session_id=f"{runtime.definition.scenario_id}-RUN-{clock.reset_count:06d}",
             scenario_id=runtime.definition.scenario_id,
@@ -748,6 +804,7 @@ class InProcessGoldenDemoSessionApi:
                 decision_result=decision_result,
                 modified_revalidation_result=modified_revalidation_result,
                 application_result=application_result,
+                emergency_return_decision=emergency_return_decision,
             ),
             clock_state=clock.state.value,
             simulation_time_utc=_utc_text(clock.current_time_utc),
@@ -788,6 +845,7 @@ class InProcessGoldenDemoSessionApi:
                 and emergency_return_recommendations is not None
                 else None
             ),
+            emergency_return_decision=emergency_return_decision,
             candidate_comparisons=_map_candidate_comparisons(resolution_result),
             exception_queue=queue,
             recommendation=recommendation,
@@ -802,6 +860,32 @@ class InProcessGoldenDemoSessionApi:
             ),
         )
 
+    def get_emergency_return_recommendation_set(
+        self,
+    ) -> EmergencyReturnRecommendationSet | None:
+        """Rebuild the current deterministic T+240 Set for a command boundary."""
+
+        decision = self._application_orchestrator.decision_orchestrator
+        steps = decision.resolution_orchestrator.step_orchestrator
+        step_result = steps.last_result
+        runtime = steps.runtime
+        batch = _build_emergency_return_candidates(
+            step_result=step_result,
+            runtime=runtime,
+        )
+        if batch is None or step_result is None:
+            return None
+        validation = runtime.emergency_return_safety_validator.validate(
+            batch,
+            step_result.traffic_snapshot.states,
+            _performance_by_aircraft(step_result=step_result, runtime=runtime),
+        )
+        return runtime.emergency_return_recommendation_service.recommend(
+            batch,
+            validation,
+            generated_at_utc=validation.evaluated_at_utc,
+        )
+
 
 def _stage(
     *,
@@ -810,7 +894,14 @@ def _stage(
     decision_result,
     modified_revalidation_result,
     application_result,
+    emergency_return_decision=None,
 ) -> GoldenDemoSessionStage:
+    if emergency_return_decision is not None:
+        if emergency_return_decision.decision_type == ControllerDecisionType.MODIFY.value:
+            return GoldenDemoSessionStage.EMERGENCY_DECISION_MODIFIED
+        if emergency_return_decision.decision_type == ControllerDecisionType.REJECT.value:
+            return GoldenDemoSessionStage.EMERGENCY_DECISION_REJECTED
+        return GoldenDemoSessionStage.EMERGENCY_DECISION_ACCEPTED
     if step_result is not None and any(
         item.priority_level is OperationalPriorityLevel.EMERGENCY
         for item in step_result.priority_assessments
@@ -1131,6 +1222,33 @@ def _map_emergency_return_batch(
 def _signed_heading_delta(actual_heading_deg: float, expected_heading_deg: float) -> float:
     delta = (actual_heading_deg - expected_heading_deg + 180.0) % 360.0 - 180.0
     return 180.0 if delta == -180.0 else delta
+
+
+def _map_emergency_return_decision(
+    audit_log: EmergencyReturnDecisionAuditLog | None,
+) -> GoldenDemoEmergencyReturnDecisionReadModel | None:
+    if audit_log is None:
+        return None
+    entry = audit_log.latest_entry
+    selected = entry.selected_recommendation
+    return GoldenDemoEmergencyReturnDecisionReadModel(
+        audit_log_id=audit_log.audit_log_id,
+        revision=audit_log.revision,
+        decision_id=entry.decision_id,
+        recommendation_set_id=entry.recommendation_set_id,
+        source_recommendation_id=entry.source_recommendation_id,
+        source_candidate_id=entry.source_candidate_id,
+        selected_recommendation_id=(
+            selected.recommendation_id if selected is not None else None
+        ),
+        selected_candidate_id=entry.selected_candidate_id,
+        decision_type=entry.decision_type.value,
+        decided_at_utc=_utc_text(entry.decided_at_utc),
+        controller_position_id=entry.controller_position_id,
+        rationale=entry.rationale,
+        authorizes_application=entry.authorizes_application,
+        requires_revalidation=entry.requires_revalidation,
+    )
 
 
 def _map_candidate_comparisons(

@@ -119,6 +119,9 @@ def test_ui_assets_include_every_fixed_session_command_and_busy_boundary() -> No
         b'command: "APPLY_VALIDATED_MODIFIED_MANEUVER"',
         b'command: "APPLY_APPROVED_MANEUVER"',
         b'command: "ADVANCE_TO_EMERGENCY"',
+        b'executeCommand("ACCEPT_EMERGENCY_RETURN")',
+        b'executeCommand("MODIFY_EMERGENCY_RETURN"',
+        b'executeCommand("REJECT_EMERGENCY_RETURN"',
         b'command: "RESET"',
     ):
         assert command in script
@@ -128,7 +131,8 @@ def test_ui_assets_include_every_fixed_session_command_and_busy_boundary() -> No
     assert b"session.primary_conflict" in script
     assert b"function renderDeviation(deviation)" in script
     assert b"function renderEmergency(emergency)" in script
-    assert b"function renderEmergencyReturnCandidates(batch)" in script
+    assert b"function renderEmergencyReturnCandidates(batch, decision, stage)" in script
+    assert b"session.emergency_return_decision" in script
     assert b"session.emergency_return_candidates" in script
     assert b"emergencyValidationSummary" in script
     assert b"candidate.new_conflict_aircraft_ids" in script
@@ -144,6 +148,7 @@ def test_ui_assets_include_every_fixed_session_command_and_busy_boundary() -> No
     assert b"function renderDecisionWorkflow(session, latestDecision)" in script
     assert b"session.modified_revalidation" in script
     assert b"COMMAND_BY_STAGE.BLOCKED_MODIFICATION" in script
+    assert b'currentSession?.stage === "EMERGENCY_DECLARED"' in script
 
 
 def test_ui_assets_animate_playback_frames_with_interpolated_markers_and_trails() -> None:
