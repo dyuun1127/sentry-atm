@@ -60,13 +60,29 @@ class OperationalPriorityEvaluator:
             for event in active_events
             if event.event_type is ScenarioEventType.EMERGENCY_DECLARED
         )
+        emergency_lifecycle_events = tuple(
+            event
+            for event in active_events
+            if event.event_type
+            in {
+                ScenarioEventType.EMERGENCY_DECLARED,
+                ScenarioEventType.EMERGENCY_CLEARED,
+            }
+        )
+        latest_emergency_event = (
+            emergency_lifecycle_events[-1] if emergency_lifecycle_events else None
+        )
+        event_emergency_active = (
+            latest_emergency_event is not None
+            and latest_emergency_event.event_type is ScenarioEventType.EMERGENCY_DECLARED
+        )
         entry_events = tuple(
             event
             for event in active_events
             if event.event_type is ScenarioEventType.ENTRY_CONFORMANCE_DEVIATION
         )
 
-        if state.emergency_status is EmergencyStatus.DECLARED or emergency_events:
+        if state.emergency_status is EmergencyStatus.DECLARED or event_emergency_active:
             score = self._policy.emergency_declared_score
             level = self._policy.emergency_declared_level
             reasons = [PriorityReasonCode.EMERGENCY_DECLARED]

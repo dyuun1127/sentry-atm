@@ -131,7 +131,12 @@ def test_ui_assets_include_every_fixed_session_command_and_busy_boundary() -> No
     assert b"session.primary_conflict" in script
     assert b"function renderDeviation(deviation)" in script
     assert b"function renderEmergency(emergency)" in script
-    assert b"function renderEmergencyReturnCandidates(batch, decision, stage)" in script
+    assert (
+        b"function renderEmergencyReturnCandidates(batch, decision, application, stage)"
+        in script
+    )
+    assert b'command: "APPLY_EMERGENCY_RETURN"' in script
+    assert b'command: "COMPLETE_EMERGENCY_RECOVERY"' in script
     assert b"session.emergency_return_decision" in script
     assert b"session.emergency_return_candidates" in script
     assert b"emergencyValidationSummary" in script
@@ -148,7 +153,8 @@ def test_ui_assets_include_every_fixed_session_command_and_busy_boundary() -> No
     assert b"function renderDecisionWorkflow(session, latestDecision)" in script
     assert b"session.modified_revalidation" in script
     assert b"COMMAND_BY_STAGE.BLOCKED_MODIFICATION" in script
-    assert b'currentSession?.stage === "EMERGENCY_DECLARED"' in script
+    assert b'"EMERGENCY_DECISION_ACCEPTED"' in script
+    assert b'"EMERGENCY_RETURN_APPLIED"' in script
 
 
 def test_ui_assets_animate_playback_frames_with_interpolated_markers_and_trails() -> None:

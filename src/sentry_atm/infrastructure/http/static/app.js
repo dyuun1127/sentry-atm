@@ -66,19 +66,29 @@ const COMMAND_BY_STAGE = {
     label: "비상 복귀안 검토 필요",
   },
   EMERGENCY_DECISION_ACCEPTED: {
-    command: "",
-    code: "AUDIT · ACCEPTED",
-    label: "비상 복귀 승인 기록 완료",
+    command: "APPLY_EMERGENCY_RETURN",
+    code: "APPLY · T+240",
+    label: "승인된 비상 복귀안 적용",
   },
   EMERGENCY_DECISION_MODIFIED: {
-    command: "",
-    code: "AUDIT · REVALIDATION REQUIRED",
-    label: "수정 복귀안 기록 완료",
+    command: "APPLY_EMERGENCY_RETURN",
+    code: "REVALIDATE & APPLY · T+240",
+    label: "수정 복귀안 재검증·적용",
   },
   EMERGENCY_DECISION_REJECTED: {
+    command: "RESET",
+    code: "RESET · T+00",
+    label: "거절 기록 후 새 Run 시작",
+  },
+  EMERGENCY_RETURN_APPLIED: {
     command: "",
-    code: "AUDIT · REJECTED",
-    label: "비상 복귀안 거절 기록 완료",
+    code: "PLAY · T+240 → T+260",
+    label: "재생하여 회복 시점까지 진행",
+  },
+  EMERGENCY_RECOVERED: {
+    command: "RESET",
+    code: "RECOVERED · T+260",
+    label: "회복 완료 · 새 Run 시작",
   },
 };
 
@@ -129,6 +139,10 @@ const elements = {
   emergencyDecisionAudit: document.querySelector("[data-emergency-decision-audit]"),
   emergencyDecisionSummary: document.querySelector("[data-emergency-decision-summary]"),
   emergencyDecisionRationale: document.querySelector("[data-emergency-decision-rationale]"),
+  emergencyApplication: document.querySelector("[data-emergency-application]"),
+  emergencyApplicationStatus: document.querySelector("[data-emergency-application-status]"),
+  emergencyApplicationSummary: document.querySelector("[data-emergency-application-summary]"),
+  emergencyApplicationDetail: document.querySelector("[data-emergency-application-detail]"),
   aircraftLayer: document.querySelector("[data-aircraft-layer]"),
   trailLayer: document.querySelector("[data-trail-layer]"),
   playbackOffset: document.querySelector("[data-playback-offset]"),
@@ -473,7 +487,12 @@ function isDecisionCueBlocking() {
         )
         || (
           activeCue.cue_type === "EMERGENCY_DECLARED"
-          && currentSession?.stage === "EMERGENCY_DECLARED"
+          && [
+            "EMERGENCY_DECLARED",
+            "EMERGENCY_DECISION_ACCEPTED",
+            "EMERGENCY_DECISION_MODIFIED",
+            "EMERGENCY_DECISION_REJECTED",
+          ].includes(currentSession?.stage)
         )
       ),
   );
@@ -634,6 +653,10 @@ async function advanceSessionForCue(cue) {
       command: "ADVANCE_TO_EMERGENCY",
       stage: "CONFLICT_RESOLVED",
     },
+    RECOVERY_COMPLETE: {
+      command: "COMPLETE_EMERGENCY_RECOVERY",
+      stage: "EMERGENCY_RETURN_APPLIED",
+    },
   };
   const transition = commandByCueType[cue.cue_type];
   if (transition && currentSession?.stage === transition.stage) {
@@ -780,14 +803,16 @@ function emergencyActionText(action) {
   return `${action.aircraft_id} → ${action.maneuver_type}`;
 }
 
-function renderEmergencyReturnCandidates(batch, decision, stage) {
+function renderEmergencyReturnCandidates(batch, decision, application, stage) {
   const candidates = Array.isArray(batch?.candidates) ? batch.candidates : [];
   elements.emergencyCandidates.hidden = candidates.length === 0;
   elements.emergencyCandidateList.replaceChildren();
   const safeCount = candidates.filter((item) => item.verdict === "SAFE").length;
   elements.emergencyValidationSummary.textContent = candidates.length > 0
     ? `PRIMARY ${batch.primary_recommendation_candidate_id ?? "NONE"} · ${safeCount} SAFE · `
-      + `${decision ? `${decision.decision_type} AUDITED` : "CONTROLLER DECISION REQUIRED"} · NOT APPLIED`
+      + `${decision ? `${decision.decision_type} AUDITED` : "CONTROLLER DECISION REQUIRED"} · ${
+        application ? "APPLIED" : "NOT APPLIED"
+      }`
     : "ISOLATED VALIDATION · NOT APPLIED";
   for (const candidate of candidates) {
     const card = document.createElement("article");
@@ -878,6 +903,23 @@ function renderEmergencyReturnCandidates(batch, decision, stage) {
     elements.emergencyDecisionSummary.textContent = `${decision.decision_type} · ${selected}`;
     elements.emergencyDecisionRationale.textContent = decision.rationale
       ?? "Primary recommendation accepted without modification.";
+  }
+  elements.emergencyApplication.hidden = !application;
+  if (application) {
+    const recovered = application.recovery_complete === true;
+    const remaining = application.remaining_high_critical_pairs ?? [];
+    elements.emergencyApplication.classList.toggle("is-recovered", recovered);
+    elements.emergencyApplicationStatus.textContent = recovered
+      ? "RECOVERY · COMPLETE AT T+260"
+      : "APPLICATION · SAFE PLAN ACTIVE AT T+240";
+    elements.emergencyApplicationSummary.textContent = recovered
+      ? `${application.emergency_aircraft_id} · ${application.emergency_status_after} · ${application.flight_phase_after}`
+      : `${application.selected_candidate_id} · ${application.validation_verdict} · ${application.actions.length} ACTION(S)`;
+    elements.emergencyApplicationDetail.textContent = recovered
+      ? `EMERGENCY QUEUE ${application.emergency_exception_status} · REMAINING HIGH/CRITICAL ${
+        remaining.length > 0 ? remaining.map((pair) => pair.join(" / ")).join(" · ") : "NONE"
+      }`
+      : "실제 상태에 적용됨 · T+260 회복 Cue까지 재생을 계속하세요.";
   }
 }
 
@@ -1341,6 +1383,8 @@ function renderStage(stage) {
     EMERGENCY_DECISION_ACCEPTED: "EMERGENCY_DECLARED",
     EMERGENCY_DECISION_MODIFIED: "EMERGENCY_DECLARED",
     EMERGENCY_DECISION_REJECTED: "EMERGENCY_DECLARED",
+    EMERGENCY_RETURN_APPLIED: "EMERGENCY_DECLARED",
+    EMERGENCY_RECOVERED: "EMERGENCY_DECLARED",
   }[stage] ?? stage;
   const currentIndex = STAGE_ORDER.indexOf(normalized);
   for (const item of elements.stageItems) {
@@ -1375,6 +1419,7 @@ function renderSession(session) {
   renderEmergencyReturnCandidates(
     session.emergency_return_candidates,
     session.emergency_return_decision,
+    session.emergency_return_application,
     session.stage,
   );
   renderStage(String(session.stage ?? "READY"));

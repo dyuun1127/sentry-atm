@@ -6,10 +6,9 @@ SENTRY는 청주공항(RKTU) 중심 Terminal Simulation Area에서 미래 4DT를
 
 ## 현재 릴리스 상태
 
-- Phase 0~17 구현 및 `main` 통합, Phase 18-A~E 구현 완료
+- Phase 0~17 구현 및 `main` 통합, Phase 18-A~F 구현 완료
 - Golden Demo Release Preflight `5/5` 통과
-- 실제 Loopback HTTP Multi-Path Regression `12/12` 통과
-- 전체 자동 테스트 `883 passed`
+- 실제 Loopback HTTP Multi-Path Regression `14/14` 통과
 - 인터넷, Docker, PostgreSQL/PostGIS, Node.js 없이 로컬 실행 가능
 
 ## 핵심 기능
@@ -27,6 +26,7 @@ SENTRY는 청주공항(RKTU) 중심 Terminal Simulation Area에서 미래 4DT를
 11. 각 비상 복귀 후보를 Traffic 복사본에서 재계산해 새 충돌·성능·우선순위·안정 접근 Gate를 설명한다.
 12. 검증된 비상 복귀안만 비용·지연·경로 연장으로 정렬해 관제사에게 1순위와 대안을 제시한다.
 13. 비상 복귀 추천의 Accept/Modify/Reject를 별도 Audit으로 남기고 후속 적용 전 Runtime을 보존한다.
+14. 승인된 비상 복귀안만 T+240에 재검증·적용하고, T+260에 비상 Queue 해제와 잔여 충돌을 함께 제시한다.
 
 ## 구현 이력
 
@@ -102,6 +102,7 @@ SENTRY는 청주공항(RKTU) 중심 Terminal Simulation Area에서 미래 4DT를
 - Phase 18-C: Isolated Emergency Return Safety Validation 구현 완료
 - Phase 18-D: Emergency Return Recommendation Ranking 구현 완료
 - Phase 18-E: Emergency Return Accept/Modify/Reject 및 분리 Audit 구현 완료
+- Phase 18-F: Emergency Return Application & Recovery 구현 완료
 
 ## 핵심 문서
 
@@ -177,7 +178,7 @@ python -m venv .venv
 
 ```text
 SENTRY ATM RELEASE PREFLIGHT PASSED (5 checks)
-SENTRY ATM DEMO CHECK PASSED (11 checkpoints)
+SENTRY ATM DEMO CHECK PASSED (14 checkpoints)
 ```
 
 점검이 통과하면 서버를 시작한다.
@@ -201,6 +202,8 @@ SENTRY ATM DEMO CHECK PASSED (11 checkpoints)
 | 승인 기동 적용 | 승인된 기동만 Runtime에 반영하고 CPA·위험도 재검증 |
 | 비상 이벤트 진행 | T+240, `MIL-T01` Queue 1순위, `ER-CAND-A~D` 격리 검증 및 B→A 추천 순위 |
 | 비상 복귀 결정 | 1순위 Accept, SAFE 대안 Modify 또는 Reject를 Audit하고 Runtime은 미적용 상태 유지 |
+| 비상 복귀 적용 | T+240, Accept/Modify로 선택된 후보를 다시 검증한 뒤 승인된 다중 Action만 Runtime에 적용 |
+| 비상 회복 완료 | T+260, `MIL-T01` 비상 상태와 Queue를 해제하고 별도 잔여 HIGH/CRITICAL 쌍을 그대로 표시 |
 | Run Reset | 파생 상태를 제거하고 깨끗한 `READY` Session 재생성 |
 
 ## 테스트 및 정적 검사
@@ -210,7 +213,7 @@ SENTRY ATM DEMO CHECK PASSED (11 checkpoints)
 .\.venv\Scripts\python.exe -m ruff check .
 ```
 
-현재 기준 결과는 Ruff 통과, `883 passed`다. 발표 전 점검과 병합 절차는
+현재 기준 결과는 Ruff 통과, `888 passed`다. 발표 전 점검과 병합 절차는
 [Golden Demo Release Readiness](docs/release_readiness.md)와
 [Final Release & Main Merge Checklist](docs/final_release.md)를 따른다.
 

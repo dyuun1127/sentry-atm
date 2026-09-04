@@ -12,6 +12,7 @@ from sentry_atm.api import (
 from sentry_atm.runtime import (
     GoldenDemoApprovedManeuverOrchestrator,
     GoldenDemoControllerDecisionOrchestrator,
+    GoldenDemoEmergencyReturnApplicationOrchestrator,
     GoldenDemoModifiedManeuverRevalidationOrchestrator,
     GoldenDemoResolutionOrchestrator,
     GoldenDemoStepOrchestrator,
@@ -30,10 +31,12 @@ def _session():
         modified_revalidation
     )
     application = GoldenDemoApprovedManeuverOrchestrator(decision)
+    emergency_application = GoldenDemoEmergencyReturnApplicationOrchestrator(steps)
     api = InProcessGoldenDemoSessionApi(
         application,
         modified_revalidation,
         modified_application,
+        emergency_application,
     )
     return runtime, steps, resolution, decision, application, modified_application, api
 
@@ -383,4 +386,5 @@ def test_session_api_rejects_unsupported_source() -> None:
             "application",  # type: ignore[arg-type]
             "modified",  # type: ignore[arg-type]
             "modified application",  # type: ignore[arg-type]
+            "emergency application",  # type: ignore[arg-type]
         )

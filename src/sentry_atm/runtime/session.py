@@ -27,6 +27,9 @@ from sentry_atm.runtime.composition import GoldenDemoRuntime, build_golden_demo_
 from sentry_atm.runtime.decision_orchestrator import (
     GoldenDemoControllerDecisionOrchestrator,
 )
+from sentry_atm.runtime.emergency_return_application_orchestrator import (
+    GoldenDemoEmergencyReturnApplicationOrchestrator,
+)
 from sentry_atm.runtime.modified_application_orchestrator import (
     GoldenDemoValidatedModifiedManeuverApplicationOrchestrator,
 )
@@ -42,6 +45,7 @@ class GoldenDemoSessionCommandService:
 
     __slots__ = (
         "_application_orchestrator",
+        "_emergency_return_application_orchestrator",
         "_modified_application_orchestrator",
         "_modified_revalidation_orchestrator",
         "_read_api",
@@ -53,6 +57,9 @@ class GoldenDemoSessionCommandService:
         modified_revalidation_orchestrator: GoldenDemoModifiedManeuverRevalidationOrchestrator,
         modified_application_orchestrator: (
             GoldenDemoValidatedModifiedManeuverApplicationOrchestrator
+        ),
+        emergency_return_application_orchestrator: (
+            GoldenDemoEmergencyReturnApplicationOrchestrator
         ),
         read_api: InProcessGoldenDemoSessionApi,
     ) -> None:
@@ -102,9 +109,33 @@ class GoldenDemoSessionCommandService:
             )
         if read_api.modified_application_orchestrator is not modified_application_orchestrator:
             raise ValueError("read_api must use the same Modified Application Orchestrator")
+        if not isinstance(
+            emergency_return_application_orchestrator,
+            GoldenDemoEmergencyReturnApplicationOrchestrator,
+        ):
+            raise TypeError(
+                "emergency_return_application_orchestrator must be a "
+                "GoldenDemoEmergencyReturnApplicationOrchestrator"
+            )
+        if (
+            emergency_return_application_orchestrator.step_orchestrator
+            is not application_orchestrator.decision_orchestrator
+            .resolution_orchestrator.step_orchestrator
+        ):
+            raise ValueError("Session Orchestrators must share one Step source")
+        if (
+            read_api.emergency_return_application_orchestrator
+            is not emergency_return_application_orchestrator
+        ):
+            raise ValueError(
+                "read_api must use the same Emergency Return Application Orchestrator"
+            )
         self._application_orchestrator = application_orchestrator
         self._modified_revalidation_orchestrator = modified_revalidation_orchestrator
         self._modified_application_orchestrator = modified_application_orchestrator
+        self._emergency_return_application_orchestrator = (
+            emergency_return_application_orchestrator
+        )
         self._read_api = read_api
 
     @property
@@ -253,6 +284,26 @@ class GoldenDemoSessionCommandService:
                 rationale=rationale,
                 modified_recommendation_id=modified_recommendation_id,
             )
+        elif selected is GoldenDemoSessionCommand.APPLY_EMERGENCY_RETURN:
+            if current.stage not in {
+                GoldenDemoSessionStage.EMERGENCY_DECISION_ACCEPTED,
+                GoldenDemoSessionStage.EMERGENCY_DECISION_MODIFIED,
+            }:
+                raise ValueError(
+                    "command requires an accepted or modified Emergency Return Decision"
+                )
+            _require_elapsed(current, elapsed_seconds=240.0)
+            recommendation_set = self._read_api.get_emergency_return_recommendation_set()
+            if recommendation_set is None:  # pragma: no cover - checkpoint invariant
+                raise ValueError("Emergency Return Recommendation Set is unavailable")
+            self._emergency_return_application_orchestrator.apply(recommendation_set)
+        elif selected is GoldenDemoSessionCommand.COMPLETE_EMERGENCY_RECOVERY:
+            _require_checkpoint(
+                current,
+                GoldenDemoSessionStage.EMERGENCY_RETURN_APPLIED,
+                elapsed_seconds=240.0,
+            )
+            self._emergency_return_application_orchestrator.complete_recovery()
         else:  # pragma: no cover - exhaustive StrEnum dispatch
             raise AssertionError(f"unsupported Session command: {selected.value}")
         return self._read_api.get_current()
@@ -433,6 +484,14 @@ def _require_checkpoint(
             f"command requires Session stage {expected_stage.value}; "
             f"current stage is {current.stage.value}"
         )
+    _require_elapsed(current, elapsed_seconds=elapsed_seconds)
+
+
+def _require_elapsed(
+    current: GoldenDemoSessionReadModel,
+    *,
+    elapsed_seconds: float,
+) -> None:
     if current.elapsed_seconds != elapsed_seconds:
         raise ValueError(
             f"command requires elapsed_seconds={elapsed_seconds:.1f}; "
@@ -451,6 +510,9 @@ class GoldenDemoSessionRuntime:
     modified_revalidation_orchestrator: GoldenDemoModifiedManeuverRevalidationOrchestrator
     modified_application_orchestrator: GoldenDemoValidatedModifiedManeuverApplicationOrchestrator
     application_orchestrator: GoldenDemoApprovedManeuverOrchestrator
+    emergency_return_application_orchestrator: (
+        GoldenDemoEmergencyReturnApplicationOrchestrator
+    )
     read_api: InProcessGoldenDemoSessionApi
     command_service: GoldenDemoSessionCommandService
     http_app: GoldenDemoSessionWsgiApp
@@ -468,15 +530,18 @@ def build_golden_demo_session_runtime() -> GoldenDemoSessionRuntime:
         modified_revalidation
     )
     application = GoldenDemoApprovedManeuverOrchestrator(decision)
+    emergency_return_application = GoldenDemoEmergencyReturnApplicationOrchestrator(steps)
     read_api = InProcessGoldenDemoSessionApi(
         application,
         modified_revalidation,
         modified_application,
+        emergency_return_application,
     )
     command_service = GoldenDemoSessionCommandService(
         application,
         modified_revalidation,
         modified_application,
+        emergency_return_application,
         read_api,
     )
     http_app = GoldenDemoSessionWsgiApp(
@@ -492,6 +557,7 @@ def build_golden_demo_session_runtime() -> GoldenDemoSessionRuntime:
         modified_revalidation_orchestrator=modified_revalidation,
         modified_application_orchestrator=modified_application,
         application_orchestrator=application,
+        emergency_return_application_orchestrator=emergency_return_application,
         read_api=read_api,
         command_service=command_service,
         http_app=http_app,

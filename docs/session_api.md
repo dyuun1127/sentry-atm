@@ -71,6 +71,8 @@ Revalidation은 비어 있다.
 | `ACCEPT_EMERGENCY_RETURN` | `EMERGENCY_DECLARED`, T+240 | `EMERGENCY_DECISION_ACCEPTED`, T+240 |
 | `MODIFY_EMERGENCY_RETURN` | `EMERGENCY_DECLARED`, T+240 | `EMERGENCY_DECISION_MODIFIED`, T+240 |
 | `REJECT_EMERGENCY_RETURN` | `EMERGENCY_DECLARED`, T+240 | `EMERGENCY_DECISION_REJECTED`, T+240 |
+| `APPLY_EMERGENCY_RETURN` | 비상 Accept/Modify, T+240 | `EMERGENCY_RETURN_APPLIED`, T+240 |
+| `COMPLETE_EMERGENCY_RECOVERY` | `EMERGENCY_RETURN_APPLIED`, T+240 | `EMERGENCY_RECOVERED`, T+260 |
 | `RESET` | 모든 Stage | 새 `READY`, T+0 Run |
 
 서비스는 caller가 임의 `advance_steps`를 전달하게 하지 않는다. `MODIFY`는 Rationale과 원 추천과 다른
@@ -206,6 +208,11 @@ T+240의 `emergency_return_candidates`는 후보 생성과 격리 검증에 더�
 
 Golden Demo의 Rank는 `ER-CAND-B=1`, `ER-CAND-A=2`이며 C/D는 `null`이다. 이 Read Model은 조회 시
 결정론적으로 재계산되지만 Clock, Traffic, Queue, Audit 또는 Aircraft Runtime을 변경하지 않는다.
+
+Phase 18-F의 `emergency_return_application`은 적용 ID, 원 Decision ID, 선택 Candidate, 직전 Safety
+Verdict, 실제 Action과 적용 시각을 제공한다. T+260 이후에는 Recovery ID, 완료 시각, 비상 상태,
+Flight Phase, Priority Exception 상태, `recovery_complete`와 잔여 HIGH/CRITICAL 쌍을 추가한다.
+Decision의 `applied`는 이 적용 결과가 생긴 뒤에만 `true`다.
 
 회귀 검사는 UI 자산, 고정 Stage/시각, Decision Audit, Validation 및 Authorization 연결, 적용 전후
 Aircraft State와 마지막 Clean Reset까지 확인한다. 각 경로가 앞 경로의 Runtime Anchor나 파생 증거를

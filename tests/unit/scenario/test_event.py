@@ -5,6 +5,7 @@ import pytest
 
 from sentry_atm.domain import EmergencyType
 from sentry_atm.scenario import (
+    EmergencyClearedPayload,
     EmergencyDeclaredPayload,
     EmergencyReasonCategory,
     EntryConformanceDeviationPayload,
@@ -62,12 +63,23 @@ def test_emergency_payload_normalizes_stable_enum_values() -> None:
     assert payload.emergency_type is EmergencyType.PRIORITY_RETURN
     assert payload.reason_category is EmergencyReasonCategory.AIRCRAFT_CONDITION
 
+    cleared = EmergencyClearedPayload(emergency_type="PRIORITY_RETURN")  # type: ignore[arg-type]
+    assert cleared.emergency_type is EmergencyType.PRIORITY_RETURN
+
 
 def test_scenario_event_requires_payload_matching_event_type() -> None:
     with pytest.raises(TypeError, match="EmergencyDeclaredPayload"):
         ScenarioEvent(
             event_id="EVT-001",
             event_type=ScenarioEventType.EMERGENCY_DECLARED,
+            scheduled_time_utc=START_UTC,
+            target_aircraft_id="MIL-T01",
+            payload=_entry_payload(),
+        )
+    with pytest.raises(TypeError, match="EmergencyClearedPayload"):
+        ScenarioEvent(
+            event_id="EVT-002",
+            event_type=ScenarioEventType.EMERGENCY_CLEARED,
             scheduled_time_utc=START_UTC,
             target_aircraft_id="MIL-T01",
             payload=_entry_payload(),

@@ -26,7 +26,7 @@ Phase 17-A는 기존 Checkpoint Dashboard를 T+0부터 T+300까지 연속 재생
 | T+75 | `RECOMMENDATION_AVAILABLE` | CAND-A~E 비교와 추천 근거 표시 | 예 | ACCEPT/MODIFY/REJECT |
 | T+90 | `POST_ACTION_REVALIDATION` | 승인 기동 적용 결과와 충돌 해소 증거 표시 | 예 | 없음 |
 | T+240 | `EMERGENCY_DECLARED` | `MIL-T01` 비상 선언과 Exception Queue 최상위 이동 | 예 | 비상 복귀안 결정 |
-| T+260 | `RECOVERY_COMPLETE` | 안전 복귀, 정상 순서 및 미해결 HIGH/CRITICAL 없음 | 예 | 없음 |
+| T+260 | `RECOVERY_COMPLETE` | `MIL-T01` 비상 회복과 Queue 해제, 별도 잔여 위험 표시 | 예 | 없음 |
 
 T+260 이후에는 T+300까지 안정화된 Traffic을 재생하고 시나리오 완료 상태를 유지한다.
 
@@ -63,6 +63,7 @@ JSON-ready 구조로 제공한다.
 - Phase 18-A: T+240 Emergency Session·Queue·Radar 동기화 — 구현 완료
 - Phase 18-B~D: 비상 복귀 후보 생성·격리 검증·추천 순위 — 구현 완료
 - Phase 18-E: 비상 복귀 Accept/Modify/Reject와 Audit UI — 구현 완료
+- Phase 18-F: 승인안 적용, T+240~260 연속 재생과 비상 회복 증거 — 구현 완료
 
 Phase 17-C에서 Radar 애니메이션이 연결되었고 Phase 17-D에서 전체 조작 계약이 완성되었다.
 
@@ -104,6 +105,7 @@ T+70과 T+75는 각각 기존 `ADVANCE_TO_CONFLICT`, `GENERATE_RECOMMENDATION` �
 화면의 Conflict/Recommendation Evidence도 같은 시각으로 갱신된다. T+75의 관제사 결정 지점에서는
 Accept/Modify/Reject가 완료되기 전 PLAY를 비활성화한다. T+240은 Phase 18-A의
 `ADVANCE_TO_EMERGENCY`와 자동 연결되어 비상 Priority와 Queue를 갱신한다. T+240에서는 1순위 Accept,
-SAFE 대안 Modify 또는 Reject가 완료될 때까지 PLAY를 비활성화하고, 결정 후에도 Phase 18-E에서는
-Runtime을 적용하지 않는다. T+260은 현재 Playback Frame과 Cue 설명을 정확히 정지해 보여주며,
-후속 비상 복귀 적용·회복 흐름에서 Session과 연결한다.
+SAFE 대안 Modify 또는 Reject가 완료될 때까지 PLAY를 비활성화한다. Phase 18-F에서 Accept/Modify
+결정은 별도 적용 명령을 거친 뒤에만 Runtime을 바꾸며, 적용 후 T+240~260 구간을 연속 재생한다.
+T+260에서는 정확한 Frame에 정지하고 회복 완료 명령을 자동 연결해 비상 Queue 해제와 잔여 위험을
+동시에 표시한다.

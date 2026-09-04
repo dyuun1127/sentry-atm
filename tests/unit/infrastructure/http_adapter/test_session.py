@@ -219,6 +219,38 @@ def test_emergency_return_http_decisions_return_non_applying_audit(
     assert session.runtime.simulation.engine.snapshot() == traffic_before
 
 
+def test_http_applies_emergency_plan_then_completes_t260_recovery() -> None:
+    session = build_golden_demo_session_runtime()
+    _post_to_emergency(session)
+    assert _post(session.http_app, "ACCEPT_EMERGENCY_RETURN")[0] == 200
+
+    apply_status, _, apply_body = _post(
+        session.http_app,
+        "APPLY_EMERGENCY_RETURN",
+    )
+    applied = json.loads(apply_body)
+
+    assert apply_status == 200
+    assert applied["stage"] == "EMERGENCY_RETURN_APPLIED"
+    assert applied["elapsed_seconds"] == 240.0
+    assert applied["emergency_return_decision"]["applied"] is True
+    assert applied["emergency_return_application"]["recovery_complete"] is False
+
+    recovery_status, _, recovery_body = _post(
+        session.http_app,
+        "COMPLETE_EMERGENCY_RECOVERY",
+    )
+    recovered = json.loads(recovery_body)
+
+    assert recovery_status == 200
+    assert recovered["stage"] == "EMERGENCY_RECOVERED"
+    assert recovered["elapsed_seconds"] == 260.0
+    evidence = recovered["emergency_return_application"]
+    assert evidence["emergency_exception_status"] == "RESOLVED"
+    assert evidence["remaining_high_critical_pairs"] == [["CIV-A03", "MIL-F01"]]
+    assert evidence["recovery_complete"] is True
+
+
 @pytest.mark.parametrize(
     ("command", "fields"),
     [

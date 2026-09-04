@@ -9,6 +9,7 @@ from sentry_atm.scenario.builder import (
     build_scenario_simulation,
 )
 from sentry_atm.scenario.event import (
+    EmergencyClearedPayload,
     EmergencyDeclaredPayload,
     EmergencyReasonCategory,
     EntryConformanceDeviationPayload,
@@ -23,6 +24,7 @@ __all__ = [
     "GOLDEN_DEMO_SCENARIO_ID",
     "GOLDEN_DEMO_START_UTC",
     "EmergencyDeclaredPayload",
+    "EmergencyClearedPayload",
     "EmergencyReasonCategory",
     "EntryConformanceDeviationPayload",
     "ScenarioAircraft",

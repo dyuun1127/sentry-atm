@@ -651,6 +651,38 @@ h1 {
   font-size: 11px;
 }
 
+.emergency-application {
+  max-width: 720px;
+  margin: 10px auto 0;
+  padding: 13px;
+  display: grid;
+  gap: 6px;
+  border: 1px solid rgba(231, 183, 101, 0.42);
+  background: rgba(231, 183, 101, 0.045);
+}
+
+.emergency-application.is-recovered {
+  border-color: rgba(113, 227, 172, 0.48);
+  background: rgba(113, 227, 172, 0.06);
+}
+
+.emergency-application span,
+.emergency-application small {
+  color: var(--faint);
+  font-family: var(--mono);
+  font-size: 8px;
+}
+
+.emergency-application strong {
+  color: var(--amber);
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.emergency-application.is-recovered strong {
+  color: var(--green-bright);
+}
+
 .deviation-panel > header {
   min-height: 112px;
   padding: 20px 24px;

@@ -155,14 +155,17 @@ def test_golden_demo_contains_typed_t_plus_60_and_240_events() -> None:
     assert tuple(event.event_type for event in events) == (
         ScenarioEventType.ENTRY_CONFORMANCE_DEVIATION,
         ScenarioEventType.EMERGENCY_DECLARED,
+        ScenarioEventType.EMERGENCY_CLEARED,
     )
     assert tuple(event.target_aircraft_id for event in events) == (
         "MIL-F01",
+        "MIL-T01",
         "MIL-T01",
     )
     assert tuple(event.scheduled_time_utc for event in events) == (
         GOLDEN_DEMO_START_UTC + timedelta(seconds=60),
         GOLDEN_DEMO_START_UTC + timedelta(seconds=240),
+        GOLDEN_DEMO_START_UTC + timedelta(seconds=260),
     )
 
     entry_payload = events[0].payload
@@ -176,6 +179,7 @@ def test_golden_demo_contains_typed_t_plus_60_and_240_events() -> None:
     assert isinstance(emergency_payload, EmergencyDeclaredPayload)
     assert emergency_payload.emergency_type is EmergencyType.PRIORITY_RETURN
     assert emergency_payload.reason_category is EmergencyReasonCategory.AIRCRAFT_CONDITION
+    assert events[2].payload.emergency_type is EmergencyType.PRIORITY_RETURN
 
 
 def test_golden_timeline_is_deterministic_and_does_not_mutate_runtime() -> None:

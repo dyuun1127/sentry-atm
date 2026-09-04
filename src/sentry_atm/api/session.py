@@ -47,6 +47,11 @@ if TYPE_CHECKING:
     from sentry_atm.runtime.application_orchestrator import (
         GoldenDemoApprovedManeuverOrchestrator,
     )
+    from sentry_atm.runtime.emergency_return_application_orchestrator import (
+        GoldenDemoEmergencyRecoveryResult,
+        GoldenDemoEmergencyReturnApplicationOrchestrator,
+        GoldenDemoEmergencyReturnApplicationResult,
+    )
     from sentry_atm.runtime.modified_application_orchestrator import (
         GoldenDemoValidatedModifiedManeuverApplicationOrchestrator,
     )
@@ -76,6 +81,8 @@ class GoldenDemoSessionStage(StrEnum):
     EMERGENCY_DECISION_ACCEPTED = "EMERGENCY_DECISION_ACCEPTED"
     EMERGENCY_DECISION_MODIFIED = "EMERGENCY_DECISION_MODIFIED"
     EMERGENCY_DECISION_REJECTED = "EMERGENCY_DECISION_REJECTED"
+    EMERGENCY_RETURN_APPLIED = "EMERGENCY_RETURN_APPLIED"
+    EMERGENCY_RECOVERED = "EMERGENCY_RECOVERED"
 
 
 class GoldenDemoSessionCommand(StrEnum):
@@ -94,6 +101,8 @@ class GoldenDemoSessionCommand(StrEnum):
     ACCEPT_EMERGENCY_RETURN = "ACCEPT_EMERGENCY_RETURN"
     MODIFY_EMERGENCY_RETURN = "MODIFY_EMERGENCY_RETURN"
     REJECT_EMERGENCY_RETURN = "REJECT_EMERGENCY_RETURN"
+    APPLY_EMERGENCY_RETURN = "APPLY_EMERGENCY_RETURN"
+    COMPLETE_EMERGENCY_RECOVERY = "COMPLETE_EMERGENCY_RECOVERY"
     RESET = "RESET"
 
 
@@ -442,6 +451,7 @@ class GoldenDemoEmergencyReturnDecisionReadModel:
     rationale: str | None
     authorizes_application: bool
     requires_revalidation: bool
+    applied: bool
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -459,7 +469,49 @@ class GoldenDemoEmergencyReturnDecisionReadModel:
             "rationale": self.rationale,
             "authorizes_application": self.authorizes_application,
             "requires_revalidation": self.requires_revalidation,
-            "applied": False,
+            "applied": self.applied,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class GoldenDemoEmergencyReturnApplicationReadModel:
+    """Applied emergency plan and optional T+260 recovery evidence."""
+
+    application_id: str
+    source_decision_id: str
+    applied_at_utc: str
+    emergency_aircraft_id: str
+    selected_candidate_id: str
+    decision_type: str
+    validation_verdict: str
+    actions: tuple[GoldenDemoEmergencyReturnActionReadModel, ...]
+    recovery_id: str | None
+    completed_at_utc: str | None
+    emergency_status_after: str
+    flight_phase_after: str
+    emergency_exception_status: str | None
+    remaining_high_critical_pairs: tuple[tuple[str, str], ...]
+    recovery_complete: bool
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "application_id": self.application_id,
+            "source_decision_id": self.source_decision_id,
+            "applied_at_utc": self.applied_at_utc,
+            "emergency_aircraft_id": self.emergency_aircraft_id,
+            "selected_candidate_id": self.selected_candidate_id,
+            "decision_type": self.decision_type,
+            "validation_verdict": self.validation_verdict,
+            "actions": [item.to_dict() for item in self.actions],
+            "recovery_id": self.recovery_id,
+            "completed_at_utc": self.completed_at_utc,
+            "emergency_status_after": self.emergency_status_after,
+            "flight_phase_after": self.flight_phase_after,
+            "emergency_exception_status": self.emergency_exception_status,
+            "remaining_high_critical_pairs": [
+                list(item) for item in self.remaining_high_critical_pairs
+            ],
+            "recovery_complete": self.recovery_complete,
         }
 
 
@@ -579,6 +631,7 @@ class GoldenDemoSessionReadModel:
     emergency: GoldenDemoEmergencyReadModel | None
     emergency_return_candidates: GoldenDemoEmergencyReturnBatchReadModel | None
     emergency_return_decision: GoldenDemoEmergencyReturnDecisionReadModel | None
+    emergency_return_application: GoldenDemoEmergencyReturnApplicationReadModel | None
     candidate_comparisons: tuple[GoldenDemoCandidateComparisonReadModel, ...]
     exception_queue: ExceptionQueueSnapshotReadModel | None
     recommendation: ResolutionRecommendationSetReadModel | None
@@ -614,6 +667,11 @@ class GoldenDemoSessionReadModel:
             "emergency_return_decision": (
                 self.emergency_return_decision.to_dict()
                 if self.emergency_return_decision is not None
+                else None
+            ),
+            "emergency_return_application": (
+                self.emergency_return_application.to_dict()
+                if self.emergency_return_application is not None
                 else None
             ),
             "candidate_comparisons": [
@@ -669,6 +727,7 @@ class InProcessGoldenDemoSessionApi:
 
     __slots__ = (
         "_application_orchestrator",
+        "_emergency_return_application_orchestrator",
         "_modified_application_orchestrator",
         "_modified_revalidation_orchestrator",
     )
@@ -682,9 +741,15 @@ class InProcessGoldenDemoSessionApi:
         modified_application_orchestrator: (
             "GoldenDemoValidatedModifiedManeuverApplicationOrchestrator"
         ),
+        emergency_return_application_orchestrator: (
+            "GoldenDemoEmergencyReturnApplicationOrchestrator"
+        ),
     ) -> None:
         from sentry_atm.runtime.application_orchestrator import (
             GoldenDemoApprovedManeuverOrchestrator,
+        )
+        from sentry_atm.runtime.emergency_return_application_orchestrator import (
+            GoldenDemoEmergencyReturnApplicationOrchestrator,
         )
         from sentry_atm.runtime.modified_application_orchestrator import (
             GoldenDemoValidatedModifiedManeuverApplicationOrchestrator,
@@ -728,6 +793,23 @@ class InProcessGoldenDemoSessionApi:
                 "Session Orchestrators must share one Modified Revalidation source"
             )
         self._modified_application_orchestrator = modified_application_orchestrator
+        if not isinstance(
+            emergency_return_application_orchestrator,
+            GoldenDemoEmergencyReturnApplicationOrchestrator,
+        ):
+            raise TypeError(
+                "emergency_return_application_orchestrator must be a "
+                "GoldenDemoEmergencyReturnApplicationOrchestrator"
+            )
+        if (
+            emergency_return_application_orchestrator.step_orchestrator
+            is not application_orchestrator.decision_orchestrator
+            .resolution_orchestrator.step_orchestrator
+        ):
+            raise ValueError("Session Orchestrators must share one Step source")
+        self._emergency_return_application_orchestrator = (
+            emergency_return_application_orchestrator
+        )
 
     @property
     def application_orchestrator(self) -> "GoldenDemoApprovedManeuverOrchestrator":
@@ -745,12 +827,24 @@ class InProcessGoldenDemoSessionApi:
     ) -> "GoldenDemoValidatedModifiedManeuverApplicationOrchestrator":
         return self._modified_application_orchestrator
 
+    @property
+    def emergency_return_application_orchestrator(
+        self,
+    ) -> "GoldenDemoEmergencyReturnApplicationOrchestrator":
+        return self._emergency_return_application_orchestrator
+
     def get_current(self) -> GoldenDemoSessionReadModel:
         application = self._application_orchestrator
         approved_application_result = application.last_result
         modified_revalidation_result = self._modified_revalidation_orchestrator.last_result
         modified_application_result = self._modified_application_orchestrator.last_result
         application_result = modified_application_result or approved_application_result
+        emergency_application_result = (
+            self._emergency_return_application_orchestrator.last_application_result
+        )
+        emergency_recovery_result = (
+            self._emergency_return_application_orchestrator.last_recovery_result
+        )
         decision = application.decision_orchestrator
         decision_result = decision.last_result
         resolution = decision.resolution_orchestrator
@@ -765,16 +859,28 @@ class InProcessGoldenDemoSessionApi:
             step_result=step_result,
             fallback=runtime.simulation.engine.snapshot(),
         )
+        if emergency_application_result is not None:
+            traffic_snapshot = emergency_application_result.application_snapshot
+        if emergency_recovery_result is not None:
+            traffic_snapshot = emergency_recovery_result.recovery_step_result.traffic_snapshot
         queue = runtime.exception_queue_api.get_current(include_resolved=True)
+        emergency_source_step = (
+            emergency_application_result.source_step_result
+            if emergency_application_result is not None
+            else step_result
+        )
         emergency_return_batch = _build_emergency_return_candidates(
-            step_result=step_result,
+            step_result=emergency_source_step,
             runtime=runtime,
         )
         emergency_return_validation = (
             runtime.emergency_return_safety_validator.validate(
                 emergency_return_batch,
-                step_result.traffic_snapshot.states,
-                _performance_by_aircraft(step_result=step_result, runtime=runtime),
+                emergency_source_step.traffic_snapshot.states,
+                _performance_by_aircraft(
+                    step_result=emergency_source_step,
+                    runtime=runtime,
+                ),
             )
             if emergency_return_batch is not None
             else None
@@ -792,7 +898,8 @@ class InProcessGoldenDemoSessionApi:
         recommendation = runtime.recommendation_api.get_current()
         controller_decision = runtime.controller_decision_api.get_current()
         emergency_return_decision = _map_emergency_return_decision(
-            runtime.emergency_return_decision_service.last_audit_log
+            runtime.emergency_return_decision_service.last_audit_log,
+            applied=emergency_application_result is not None,
         )
         return GoldenDemoSessionReadModel(
             session_id=f"{runtime.definition.scenario_id}-RUN-{clock.reset_count:06d}",
@@ -805,6 +912,8 @@ class InProcessGoldenDemoSessionApi:
                 modified_revalidation_result=modified_revalidation_result,
                 application_result=application_result,
                 emergency_return_decision=emergency_return_decision,
+                emergency_application_result=emergency_application_result,
+                emergency_recovery_result=emergency_recovery_result,
             ),
             clock_state=clock.state.value,
             simulation_time_utc=_utc_text(clock.current_time_utc),
@@ -830,7 +939,7 @@ class InProcessGoldenDemoSessionApi:
                 scenario_events=runtime.simulation.timeline.events,
             ),
             emergency=_map_emergency(
-                step_result=step_result,
+                step_result=emergency_source_step,
                 scenario_events=runtime.simulation.timeline.events,
                 queue=queue,
             ),
@@ -846,6 +955,14 @@ class InProcessGoldenDemoSessionApi:
                 else None
             ),
             emergency_return_decision=emergency_return_decision,
+            emergency_return_application=(
+                _map_emergency_return_application(
+                    emergency_application_result,
+                    emergency_recovery_result,
+                )
+                if emergency_application_result is not None
+                else None
+            ),
             candidate_comparisons=_map_candidate_comparisons(resolution_result),
             exception_queue=queue,
             recommendation=recommendation,
@@ -895,7 +1012,13 @@ def _stage(
     modified_revalidation_result,
     application_result,
     emergency_return_decision=None,
+    emergency_application_result=None,
+    emergency_recovery_result=None,
 ) -> GoldenDemoSessionStage:
+    if emergency_recovery_result is not None:
+        return GoldenDemoSessionStage.EMERGENCY_RECOVERED
+    if emergency_application_result is not None:
+        return GoldenDemoSessionStage.EMERGENCY_RETURN_APPLIED
     if emergency_return_decision is not None:
         if emergency_return_decision.decision_type == ControllerDecisionType.MODIFY.value:
             return GoldenDemoSessionStage.EMERGENCY_DECISION_MODIFIED
@@ -1226,6 +1349,8 @@ def _signed_heading_delta(actual_heading_deg: float, expected_heading_deg: float
 
 def _map_emergency_return_decision(
     audit_log: EmergencyReturnDecisionAuditLog | None,
+    *,
+    applied: bool = False,
 ) -> GoldenDemoEmergencyReturnDecisionReadModel | None:
     if audit_log is None:
         return None
@@ -1248,6 +1373,66 @@ def _map_emergency_return_decision(
         rationale=entry.rationale,
         authorizes_application=entry.authorizes_application,
         requires_revalidation=entry.requires_revalidation,
+        applied=applied,
+    )
+
+
+def _map_emergency_return_application(
+    application: "GoldenDemoEmergencyReturnApplicationResult",
+    recovery: "GoldenDemoEmergencyRecoveryResult | None",
+) -> GoldenDemoEmergencyReturnApplicationReadModel:
+    final_state = (
+        recovery.recovery_state
+        if recovery is not None
+        else next(
+            item
+            for item in application.applied_states
+            if item.aircraft_id == application.emergency_aircraft_id
+        )
+    )
+    return GoldenDemoEmergencyReturnApplicationReadModel(
+        application_id=application.application_id,
+        source_decision_id=application.source_decision_id,
+        applied_at_utc=_utc_text(application.applied_at_utc),
+        emergency_aircraft_id=application.emergency_aircraft_id,
+        selected_candidate_id=application.candidate.candidate_id,
+        decision_type=application.decision_entry.decision_type.value,
+        validation_verdict=application.safety_validation.verdict.value,
+        actions=tuple(
+            GoldenDemoEmergencyReturnActionReadModel(
+                aircraft_id=action.aircraft_id,
+                maneuver_type=action.maneuver.maneuver_type.value,
+                target_ground_speed_kt=(
+                    action.maneuver.target_ground_speed_kt
+                    if isinstance(action.maneuver, SpeedManeuver)
+                    else None
+                ),
+                delay_seconds=(
+                    action.maneuver.delay_seconds
+                    if isinstance(action.maneuver, EntryDelayManeuver)
+                    else None
+                ),
+                target_sequence_position=(
+                    action.maneuver.target_sequence_position
+                    if isinstance(action.maneuver, SequenceChangeManeuver)
+                    else None
+                ),
+            )
+            for action in application.candidate.actions
+        ),
+        recovery_id=recovery.recovery_id if recovery is not None else None,
+        completed_at_utc=(
+            _utc_text(recovery.completed_at_utc) if recovery is not None else None
+        ),
+        emergency_status_after=final_state.emergency_status.value,
+        flight_phase_after=final_state.flight_phase.value,
+        emergency_exception_status=(
+            recovery.emergency_exception_status.value if recovery is not None else None
+        ),
+        remaining_high_critical_pairs=(
+            recovery.remaining_high_critical_pairs if recovery is not None else ()
+        ),
+        recovery_complete=recovery.recovery_complete if recovery is not None else False,
     )
 
 

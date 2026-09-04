@@ -454,6 +454,11 @@ Accept/Modify/Reject, 선택한 대안, UTC 시각, 관제 위치와 사유를 �
 Set당 하나인 최종 결정을 Revision 순서로 보존한다. 두 모델은 기존 단일 기동용 Controller Decision
 Audit과 분리되며 어떤 Candidate Action도 직접 적용하지 않는다.
 
+`GoldenDemoEmergencyReturnApplicationResult`는 T+240의 원 Decision, 직전 SAFE Validation, 선택된 다중
+Action, 적용 전후 Aircraft State와 Traffic Snapshot을 연결한다. `GoldenDemoEmergencyRecoveryResult`는
+이를 참조해 T+260의 `MIL-T01` 최종 상태, 새 Step, Queue Lifecycle과 잔여 HIGH/CRITICAL Pair를
+보존한다. 두 결과는 process-local 실행 증거이며 원 Decision Audit을 수정하지 않는다.
+
 ## 20. 의도적으로 제외한 모델
 
 다음은 현재 Phase의 책임이 아니므로 아직 구현하지 않는다.

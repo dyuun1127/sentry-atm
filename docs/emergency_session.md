@@ -6,7 +6,8 @@ Phase 18-A는 해결된 Golden Demo Run을 T+90에서 T+240으로 진행하고, 
 `EVT-MIL-T01-EMERGENCY`를 Session·Exception Queue·Web UI에 동일한 Checkpoint로 노출한다.
 Phase 18-B는 이 비상 증거에서 조정 후보를 생성하고 Phase 18-C는 각 후보를 원 Traffic의 복사본에서
 격리 검증한다. Phase 18-D는 검증된 안전 후보만 결정론적으로 정렬하고, Phase 18-E는 관제사의
-Accept/Modify/Reject를 별도 Audit으로 기록한다. 실제 적용은 후속 단계의 범위다.
+Accept/Modify/Reject를 별도 Audit으로 기록한다. Phase 18-F는 승인된 계획의 명시적 적용과 T+260
+비상 회복 증거를 연결한다.
 
 ## 2. 결정론적 전환
 
@@ -124,3 +125,20 @@ T+240 `EMERGENCY_DECLARED`에서 관제사는 추천 묶음당 한 번만 다음
 Audit은 원 추천·선택 추천/후보, 관제 위치, UTC 결정 시각, 사유, 적용 권한과 재검증 필요 여부를
 보존한다. 세 결정 모두 T+240 Clock, Traffic, Exception Queue 및 Aircraft Runtime을 변경하지 않으며
 응답의 `applied`는 항상 `false`다. Reset은 이 process-local Audit도 함께 제거한다.
+
+## 10. Phase 18-F 적용과 회복
+
+`APPLY_EMERGENCY_RETURN`은 T+240의 `EMERGENCY_DECISION_ACCEPTED` 또는
+`EMERGENCY_DECISION_MODIFIED`에서만 실행된다. 선택된 후보가 같은 Recommendation Set에서 다시
+`SAFE`로 검증되는지 확인한 뒤 Action을 실제 Synthetic Runtime에 적용한다. Accept는 `ER-CAND-B`,
+Modify는 선택한 `ER-CAND-A`의 세 Action을 적용한다. Reject에는 적용 경로가 없다.
+
+적용 직후 Clock은 T+240에 머물며 Stage는 `EMERGENCY_RETURN_APPLIED`다. 따라서 브라우저는 T+240부터
+T+260까지 Marker와 Trail을 연속 재생할 수 있다. T+260 `RECOVERY_COMPLETE` Cue에서
+`COMPLETE_EMERGENCY_RECOVERY`가 실행되면 `MIL-T01`은 `NONE / FINAL`, Operational Priority는
+`ROUTINE`, 해당 Priority Exception은 `RESOLVED`가 된다.
+
+`recovery_complete`는 비상 항공기와 그 Queue 항목의 회복만 뜻한다. T+260에도 존재하는 별도
+`CIV-A03 / MIL-F01` HIGH Conflict는 삭제하거나 안전으로 위장하지 않고
+`remaining_high_critical_pairs`에 보존한다. 전체 시나리오의 `SC-014` 충족은 Phase 19의 종료 평가와
+추가 조정 범위다.

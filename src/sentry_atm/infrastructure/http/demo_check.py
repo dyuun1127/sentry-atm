@@ -318,6 +318,66 @@ def run_golden_demo_regression(
             )
         )
 
+        emergency_applied = _post_command(connection, "APPLY_EMERGENCY_RETURN")
+        _require_session(
+            emergency_applied,
+            expected_stage="EMERGENCY_RETURN_APPLIED",
+            expected_elapsed=240.0,
+        )
+        applied_evidence = _mapping(
+            emergency_applied,
+            "emergency_return_application",
+        )
+        _require(
+            applied_evidence.get("selected_candidate_id") == "ER-CAND-B"
+            and applied_evidence.get("validation_verdict") == "SAFE"
+            and applied_evidence.get("recovery_complete") is False,
+            "accepted ER-CAND-B must be freshly SAFE and applied at T+240",
+        )
+        _require(
+            _aircraft(emergency_applied, "MIL-T01").get("emergency_status")
+            == "DECLARED",
+            "applied Emergency Return must update MIL-T01 only after authorization",
+        )
+        checkpoints.append(
+            _checkpoint(
+                "EMERGENCY_APPLY",
+                emergency_applied,
+                "ER-CAND-B freshly validated and applied | recovery pending",
+            )
+        )
+
+        emergency_recovered = _post_command(
+            connection,
+            "COMPLETE_EMERGENCY_RECOVERY",
+        )
+        _require_session(
+            emergency_recovered,
+            expected_stage="EMERGENCY_RECOVERED",
+            expected_elapsed=260.0,
+        )
+        recovery_evidence = _mapping(
+            emergency_recovered,
+            "emergency_return_application",
+        )
+        _require(
+            recovery_evidence.get("recovery_complete") is True
+            and recovery_evidence.get("emergency_exception_status") == "RESOLVED",
+            "MIL-T01 Emergency Return must be recovered and resolved at T+260",
+        )
+        _require(
+            recovery_evidence.get("remaining_high_critical_pairs")
+            == [["CIV-A03", "MIL-F01"]],
+            "T+260 must retain the unrelated residual HIGH Conflict",
+        )
+        checkpoints.append(
+            _checkpoint(
+                "EMERGENCY_RECOVERY",
+                emergency_recovered,
+                "MIL-T01 recovered | Queue resolved | residual HIGH retained",
+            )
+        )
+
         reset = _post_command(connection, "RESET")
         _require_session(reset, expected_stage="READY", expected_elapsed=0.0)
         _require(reset.get("run_number") == 1, "reset must increment the Run number")
@@ -551,6 +611,7 @@ def _verify_ui_assets(connection: HTTPConnection) -> None:
     )
     _require(b"data-conflict-explainability" in html, "explainability UI is missing")
     _require(b"data-decision-actions" in html, "operator decision controls are missing")
+    _require(b"data-emergency-application" in html, "Emergency application UI is missing")
     _require(
         b"data-modified-revalidation" in html,
         "modified revalidation evidence panel is missing",
@@ -567,6 +628,11 @@ def _verify_ui_assets(connection: HTTPConnection) -> None:
     _require(
         b"APPLY_VALIDATED_MODIFIED_MANEUVER" in script,
         "validated modified Maneuver application workflow is missing",
+    )
+    _require(b"APPLY_EMERGENCY_RETURN" in script, "Emergency application workflow is missing")
+    _require(
+        b"COMPLETE_EMERGENCY_RECOVERY" in script,
+        "Emergency recovery workflow is missing",
     )
 
 

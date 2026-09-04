@@ -207,7 +207,7 @@ def build_golden_demo_playback_contract() -> GoldenDemoPlaybackContract:
                 cue_id="CUE-T260-RECOVERY",
                 cue_type=GoldenDemoPlaybackCueType.RECOVERY_COMPLETE,
                 offset_seconds=260.0,
-                label="안전 복귀 및 정상 흐름 회복",
+                label="MIL-T01 비상 회복 및 잔여 위험 재평가",
                 auto_pause=True,
             ),
         ),

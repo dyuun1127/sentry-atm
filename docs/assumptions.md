@@ -492,6 +492,17 @@
 - 제한: 관제 위치 `RKTU-DEMO-CONTROLLER`는 Golden Demo 식별자이며 실제 관제기관 구조가 아니다.
 - 검증: 세 결정 경로, 중복·잘못된 입력 차단, Reset, HTTP 및 실제 Loopback 회귀 테스트
 
+### ASM-046 - 비상 복귀 적용과 T+260 회복 경계
+
+- 상태: `PROVISIONAL`
+- 내용: 승인된 후보는 T+240에 같은 Recommendation Set으로 다시 검증한 뒤 적용한다. 적용과 회복을
+  분리해 T+240~260 Radar 애니메이션을 유지하며, T+260에는 `MIL-T01` 비상 상태·Priority Exception만
+  회복 완료로 판정한다.
+- 제한: `recovery_complete`는 전체 Traffic 무충돌을 뜻하지 않는다. 기존
+  `CIV-A03 / MIL-F01` HIGH Conflict는 잔여 위험으로 공개하고 Phase 19 종료 평가에서 다룬다.
+- 검증: Accept/Modify 적용, Reject 차단, 명령 순서, T+260 Queue Lifecycle, 잔여 위험 보존 및 Loopback
+  HTTP 회귀 테스트
+
 ## 5. Phase별 확정 시점
 
 | Phase | 반드시 확정할 Assumption |
@@ -509,7 +520,7 @@
 | Phase 11 | ASM-028, 033, 039 |
 | Phase 12 | ASM-011, 021, 030, 032, 040 |
 | Phase 13 | ASM-041 |
-| Phase 18 | ASM-042~044 |
+| Phase 18 | ASM-042~046 |
 
 ## 6. 변경 규칙
 

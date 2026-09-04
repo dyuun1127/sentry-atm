@@ -19,6 +19,7 @@ class ScenarioEventType(StrEnum):
 
     ENTRY_CONFORMANCE_DEVIATION = "ENTRY_CONFORMANCE_DEVIATION"
     EMERGENCY_DECLARED = "EMERGENCY_DECLARED"
+    EMERGENCY_CLEARED = "EMERGENCY_CLEARED"
 
 
 class EmergencyReasonCategory(StrEnum):
@@ -105,7 +106,21 @@ class EmergencyDeclaredPayload:
         )
 
 
-type ScenarioEventPayload = EntryConformanceDeviationPayload | EmergencyDeclaredPayload
+@dataclass(frozen=True, slots=True)
+class EmergencyClearedPayload:
+    """Synthetic recovery marker for one previously declared emergency type."""
+
+    emergency_type: EmergencyType
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "emergency_type", EmergencyType(self.emergency_type))
+
+
+type ScenarioEventPayload = (
+    EntryConformanceDeviationPayload
+    | EmergencyDeclaredPayload
+    | EmergencyClearedPayload
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -142,6 +157,7 @@ class ScenarioEvent:
         expected_payload_type = {
             ScenarioEventType.ENTRY_CONFORMANCE_DEVIATION: (EntryConformanceDeviationPayload),
             ScenarioEventType.EMERGENCY_DECLARED: EmergencyDeclaredPayload,
+            ScenarioEventType.EMERGENCY_CLEARED: EmergencyClearedPayload,
         }[self.event_type]
         if not isinstance(self.payload, expected_payload_type):
             raise TypeError(

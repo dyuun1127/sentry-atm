@@ -13,6 +13,11 @@ from sentry_atm.runtime.decision_orchestrator import (
     GoldenDemoControllerDecisionOrchestrator,
     GoldenDemoControllerDecisionResult,
 )
+from sentry_atm.runtime.emergency_return_application_orchestrator import (
+    GoldenDemoEmergencyRecoveryResult,
+    GoldenDemoEmergencyReturnApplicationOrchestrator,
+    GoldenDemoEmergencyReturnApplicationResult,
+)
 from sentry_atm.runtime.modified_application_orchestrator import (
     GoldenDemoValidatedModifiedManeuverApplicationOrchestrator,
     GoldenDemoValidatedModifiedManeuverApplicationResult,
@@ -41,6 +46,9 @@ __all__ = [
     "GoldenDemoApprovedManeuverOrchestrator",
     "GoldenDemoControllerDecisionOrchestrator",
     "GoldenDemoControllerDecisionResult",
+    "GoldenDemoEmergencyRecoveryResult",
+    "GoldenDemoEmergencyReturnApplicationOrchestrator",
+    "GoldenDemoEmergencyReturnApplicationResult",
     "GoldenDemoRuntime",
     "GoldenDemoModifiedManeuverRevalidationOrchestrator",
     "GoldenDemoModifiedManeuverRevalidationResult",

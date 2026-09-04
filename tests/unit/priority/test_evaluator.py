@@ -12,6 +12,7 @@ from sentry_atm.domain import (
 )
 from sentry_atm.priority import OperationalPriorityEvaluator
 from sentry_atm.scenario import (
+    EmergencyClearedPayload,
     EmergencyDeclaredPayload,
     EmergencyReasonCategory,
     EntryConformanceDeviationPayload,
@@ -84,6 +85,18 @@ def _emergency_event(
     )
 
 
+def _emergency_cleared_event() -> ScenarioEvent:
+    return ScenarioEvent(
+        event_id="EVT-EMERGENCY-CLEARED",
+        event_type=ScenarioEventType.EMERGENCY_CLEARED,
+        scheduled_time_utc=START_UTC + timedelta(seconds=260),
+        target_aircraft_id="MIL-T01",
+        payload=EmergencyClearedPayload(
+            emergency_type=EmergencyType.PRIORITY_RETURN,
+        ),
+    )
+
+
 def test_routine_aircraft_has_routine_priority_without_source_event() -> None:
     evaluator = OperationalPriorityEvaluator()
 
@@ -139,6 +152,20 @@ def test_declared_state_is_emergency_even_without_source_event() -> None:
     assert assessment.priority_level is OperationalPriorityLevel.EMERGENCY
     assert assessment.reason_codes == (PriorityReasonCode.EMERGENCY_DECLARED,)
     assert assessment.source_event_ids == ()
+
+
+def test_later_clear_event_returns_recovered_aircraft_to_routine_priority() -> None:
+    assessment = OperationalPriorityEvaluator().evaluate(
+        _state(offset_seconds=260),
+        (_emergency_cleared_event(), _emergency_event()),
+    )
+
+    assert assessment.priority_level is OperationalPriorityLevel.ROUTINE
+    assert assessment.reason_codes == (PriorityReasonCode.ROUTINE_OPERATION,)
+    assert assessment.source_event_ids == (
+        "EVT-EMERGENCY",
+        "EVT-EMERGENCY-CLEARED",
+    )
 
 
 def test_future_and_other_aircraft_events_do_not_leak_into_priority() -> None:

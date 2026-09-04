@@ -392,6 +392,80 @@ def test_reset_clears_emergency_return_decision_audit() -> None:
     assert session.runtime.emergency_return_decision_service.last_audit_log is None
 
 
+def test_accepted_emergency_return_applies_then_recovers_at_separate_checkpoints() -> None:
+    session = build_golden_demo_session_runtime()
+    _advance_to_emergency(session)
+    session.command_service.execute(GoldenDemoSessionCommand.ACCEPT_EMERGENCY_RETURN)
+
+    applied = session.command_service.execute(
+        GoldenDemoSessionCommand.APPLY_EMERGENCY_RETURN
+    )
+
+    assert applied.stage is GoldenDemoSessionStage.EMERGENCY_RETURN_APPLIED
+    assert applied.elapsed_seconds == 240.0
+    assert applied.emergency_return_decision is not None
+    assert applied.emergency_return_decision.applied
+    assert applied.emergency_return_application is not None
+    evidence = applied.emergency_return_application
+    assert evidence.selected_candidate_id == "ER-CAND-B"
+    assert evidence.validation_verdict == "SAFE"
+    assert not evidence.recovery_complete
+    emergency = next(item for item in applied.traffic if item.aircraft_id == "MIL-T01")
+    assert emergency.emergency_status == "DECLARED"
+    assert emergency.flight_phase == "APPROACH"
+
+    recovered = session.command_service.execute(
+        GoldenDemoSessionCommand.COMPLETE_EMERGENCY_RECOVERY
+    )
+
+    assert recovered.stage is GoldenDemoSessionStage.EMERGENCY_RECOVERED
+    assert recovered.elapsed_seconds == 260.0
+    assert recovered.emergency_return_application is not None
+    recovery = recovered.emergency_return_application
+    assert recovery.recovery_complete
+    assert recovery.emergency_exception_status == "RESOLVED"
+    assert recovery.emergency_status_after == "NONE"
+    assert recovery.flight_phase_after == "FINAL"
+    assert recovery.remaining_high_critical_pairs == (("CIV-A03", "MIL-F01"),)
+
+
+def test_modified_emergency_return_applies_all_coordinated_actions_after_revalidation() -> None:
+    session = build_golden_demo_session_runtime()
+    _advance_to_emergency(session)
+    session.command_service.execute(
+        GoldenDemoSessionCommand.MODIFY_EMERGENCY_RETURN,
+        rationale="Prefer protected priority-first recovery",
+        modified_emergency_candidate_id="ER-CAND-A",
+    )
+
+    applied = session.command_service.execute(
+        GoldenDemoSessionCommand.APPLY_EMERGENCY_RETURN
+    )
+
+    assert applied.emergency_return_application is not None
+    assert applied.emergency_return_application.selected_candidate_id == "ER-CAND-A"
+    assert len(applied.emergency_return_application.actions) == 3
+    speed_control = next(item for item in applied.traffic if item.aircraft_id == "CIV-A02")
+    assert speed_control.ground_speed_kt == 220.0
+    assert session.command_service.execute(
+        GoldenDemoSessionCommand.COMPLETE_EMERGENCY_RECOVERY
+    ).stage is GoldenDemoSessionStage.EMERGENCY_RECOVERED
+
+
+def test_rejected_emergency_return_cannot_be_applied() -> None:
+    session = build_golden_demo_session_runtime()
+    _advance_to_emergency(session)
+    rejected = session.command_service.execute(
+        GoldenDemoSessionCommand.REJECT_EMERGENCY_RETURN,
+        rationale="Coordinate a manual recovery plan",
+    )
+
+    with pytest.raises(ValueError, match="accepted or modified"):
+        session.command_service.execute(GoldenDemoSessionCommand.APPLY_EMERGENCY_RETURN)
+
+    assert session.read_api.get_current() == rejected
+
+
 def test_command_rejects_clock_drift_before_advancing_checkpoint() -> None:
     session = build_golden_demo_session_runtime()
     session.command_service.execute(GoldenDemoSessionCommand.START)
@@ -451,6 +525,7 @@ def test_command_service_validates_dependencies_and_command_type() -> None:
             "application",  # type: ignore[arg-type]
             session.modified_revalidation_orchestrator,
             session.modified_application_orchestrator,
+            session.emergency_return_application_orchestrator,
             session.read_api,
         )
     with pytest.raises(TypeError, match="InProcessGoldenDemoSessionApi"):
@@ -458,6 +533,7 @@ def test_command_service_validates_dependencies_and_command_type() -> None:
             session.application_orchestrator,
             session.modified_revalidation_orchestrator,
             session.modified_application_orchestrator,
+            session.emergency_return_application_orchestrator,
             "api",  # type: ignore[arg-type]
         )
     with pytest.raises(TypeError, match="ValidatedModifiedManeuverApplication"):
@@ -465,6 +541,7 @@ def test_command_service_validates_dependencies_and_command_type() -> None:
             session.application_orchestrator,
             session.modified_revalidation_orchestrator,
             "modified application",  # type: ignore[arg-type]
+            session.emergency_return_application_orchestrator,
             session.read_api,
         )
 
@@ -473,12 +550,14 @@ def test_command_service_validates_dependencies_and_command_type() -> None:
         other.application_orchestrator,
         other.modified_revalidation_orchestrator,
         other.modified_application_orchestrator,
+        other.emergency_return_application_orchestrator,
     )
     with pytest.raises(ValueError, match="same Application Orchestrator"):
         GoldenDemoSessionCommandService(
             session.application_orchestrator,
             session.modified_revalidation_orchestrator,
             session.modified_application_orchestrator,
+            session.emergency_return_application_orchestrator,
             mismatched_api,
         )
 

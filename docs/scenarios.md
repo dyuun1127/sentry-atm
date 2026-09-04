@@ -305,7 +305,9 @@ reason_category: AIRCRAFT_CONDITION
 
 ### 8.11 T+260초 이후 - 승인, 최종접근 안정화 및 정상 흐름 복구
 
-관제사 승인 후 조치를 Runtime에 적용한다. `MIL-T01`이 안전한 최종접근 상태에 도달하고 Tower 이양 준비가 완료되면 비상 처리 구간을 종료한다.
+관제사 승인 후 조치를 Runtime에 적용한다. `MIL-T01`이 최종접근 상태에 도달하면 해당 비상 Priority와
+Queue 항목을 종료한다. 이 판정은 전체 Traffic 무충돌을 뜻하지 않으며 잔여 HIGH/CRITICAL Conflict는
+별도 증거로 계속 노출한다.
 
 이후 지연된 Traffic을 재평가하고 정상 접근 순서를 복구한다. 실제 착륙과 Tower 관제는 시뮬레이션하지 않는다.
 

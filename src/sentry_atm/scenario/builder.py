@@ -12,6 +12,7 @@ from sentry_atm.domain import (
     FlightPhase,
 )
 from sentry_atm.scenario.event import (
+    EmergencyClearedPayload,
     EmergencyDeclaredPayload,
     EmergencyReasonCategory,
     EntryConformanceDeviationPayload,
@@ -251,6 +252,15 @@ def build_golden_demo_events() -> tuple[ScenarioEvent, ...]:
             payload=EmergencyDeclaredPayload(
                 emergency_type=EmergencyType.PRIORITY_RETURN,
                 reason_category=EmergencyReasonCategory.AIRCRAFT_CONDITION,
+            ),
+        ),
+        ScenarioEvent(
+            event_id="EVT-MIL-T01-EMERGENCY-CLEARED",
+            event_type=ScenarioEventType.EMERGENCY_CLEARED,
+            scheduled_time_utc=GOLDEN_DEMO_START_UTC + timedelta(seconds=260),
+            target_aircraft_id="MIL-T01",
+            payload=EmergencyClearedPayload(
+                emergency_type=EmergencyType.PRIORITY_RETURN,
             ),
         ),
     )
