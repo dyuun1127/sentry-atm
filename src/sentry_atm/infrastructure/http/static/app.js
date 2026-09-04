@@ -99,6 +99,7 @@ const elements = {
   emergencyReasons: document.querySelector("[data-emergency-reasons]"),
   emergencyCandidates: document.querySelector("[data-emergency-candidates]"),
   emergencyCandidateList: document.querySelector("[data-emergency-candidate-list]"),
+  emergencyValidationSummary: document.querySelector("[data-emergency-validation-summary]"),
   aircraftLayer: document.querySelector("[data-aircraft-layer]"),
   trailLayer: document.querySelector("[data-trail-layer]"),
   playbackOffset: document.querySelector("[data-playback-offset]"),
@@ -745,9 +746,17 @@ function renderEmergencyReturnCandidates(batch) {
   const candidates = Array.isArray(batch?.candidates) ? batch.candidates : [];
   elements.emergencyCandidates.hidden = candidates.length === 0;
   elements.emergencyCandidateList.replaceChildren();
+  const safeCount = candidates.filter((item) => item.verdict === "SAFE").length;
+  elements.emergencyValidationSummary.textContent = candidates.length > 0
+    ? `${safeCount} SAFE · ${candidates.length - safeCount} UNSAFE · ${formatNumber(
+      batch.validation_horizon_seconds,
+    )} SEC ISOLATED · NOT APPLIED`
+    : "ISOLATED VALIDATION · NOT APPLIED";
   for (const candidate of candidates) {
     const card = document.createElement("article");
     card.className = `emergency-candidate${candidate.baseline ? " is-baseline" : ""}`;
+    card.classList.toggle("is-safe", candidate.verdict === "SAFE");
+    card.classList.toggle("is-unsafe", candidate.verdict === "UNSAFE");
 
     const heading = document.createElement("div");
     const candidateId = document.createElement("strong");
@@ -773,12 +782,20 @@ function renderEmergencyReturnCandidates(batch) {
         actions.append(item);
       }
     }
+    const evidence = document.createElement("div");
+    evidence.className = "emergency-validation-evidence";
+    evidence.textContent = `NEW CONFLICT ${(candidate.new_conflict_aircraft_ids ?? []).length} · PERF ${
+      candidate.performance_feasible ? "PASS" : "FAIL"
+    } · PRIORITY #${formatNumber(candidate.emergency_sequence_position)} · STABLE ${
+      candidate.stabilized_arrival_preserved ? "KEPT" : "DISPLACED"
+    }`;
+    evidence.title = (candidate.reason_codes ?? []).join(" · ");
     const footer = document.createElement("div");
     footer.append(
       `COST ${formatNumber(candidate.operational_cost_score)}`,
       candidate.preserves_stabilized_arrival ? " · STABLE ARRIVAL KEPT" : " · STABLE ARRIVAL DISPLACED",
     );
-    card.append(heading, strategy, sequence, actions, footer);
+    card.append(heading, strategy, sequence, actions, evidence, footer);
     elements.emergencyCandidateList.append(card);
   }
 }

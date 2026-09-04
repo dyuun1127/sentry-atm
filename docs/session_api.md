@@ -37,7 +37,7 @@ Application을 실행하지 않는다.
 - HIGH/CRITICAL 원 충돌의 항공기쌍, CPA/TCPA, 분리기준 대비 비율, Risk Score/Reason/Profile 증거
 - T+60 진입 이벤트의 계획·실제 고도/침로 및 수평·수직·시간 편차
 - T+240 비상 선언과 독립된 Operational Priority, Source Event 및 Exception Queue 순위
-- T+240 비상 복귀 후보의 Arrival Sequence, 다중 Aircraft Action, Cost와 미검증 상태
+- T+240 비상 복귀 후보의 Arrival Sequence, 다중 Aircraft Action, Cost와 격리 Safety Gate 증거
 - CAND-A~E 전체의 기동, 비용, 원 충돌 결과, 2차 충돌, 규칙 위반과 검증 판정
 - 적용 전후 고도, Post-apply Prediction/Conflict Run과 원 Conflict의 SAFE/LOW/RESOLVED 요약
 

@@ -124,6 +124,9 @@ def test_composition_wires_one_shared_clock_and_all_core_services() -> None:
     assert runtime.emergency_return_candidate_generator.profile.profile_id == (
         "POC_EMERGENCY_RETURN_V1"
     )
+    assert runtime.emergency_return_safety_validator.profile.profile_id == (
+        "POC_EMERGENCY_RETURN_SAFETY_V1"
+    )
     assert runtime.safety_validator.profile.profile_id == "POC_SAFETY_V1"
     assert runtime.recommendation_service.profile.profile_id == "POC_RECOMMENDATION_V1"
 

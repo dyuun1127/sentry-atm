@@ -229,6 +229,9 @@ def test_session_projects_each_completed_backend_stage() -> None:
     assert return_batch.source_exception_id == "EXCEPTION-PRIORITY-MIL-T01"
     assert return_batch.emergency_aircraft_id == "MIL-T01"
     assert return_batch.generator_profile_id == "POC_EMERGENCY_RETURN_V1"
+    assert return_batch.validation_profile_id == "POC_EMERGENCY_RETURN_SAFETY_V1"
+    assert return_batch.validation_horizon_seconds == 120.0
+    assert return_batch.baseline_conflict_aircraft_ids == (("CIV-A03", "MIL-F01"),)
     assert tuple(item.candidate_id for item in return_batch.candidates) == (
         "ER-CAND-A",
         "ER-CAND-B",
@@ -245,10 +248,19 @@ def test_session_projects_each_completed_backend_stage() -> None:
     )
     assert protected.actions[1].target_ground_speed_kt == 220.0
     assert protected.actions[2].delay_seconds == 30.0
-    assert all(
-        item.to_dict()["validation_status"] == "NOT_VALIDATED"
-        for item in return_batch.candidates
+    assert tuple(item.verdict for item in return_batch.candidates) == (
+        "SAFE",
+        "SAFE",
+        "UNSAFE",
+        "UNSAFE",
     )
+    assert all(item.new_conflict_aircraft_ids == () for item in return_batch.candidates)
+    assert protected.performance_feasible
+    assert protected.priority_target_achieved
+    assert protected.stabilized_arrival_preserved
+    assert return_batch.candidates[2].stabilized_arrival_preserved is False
+    assert return_batch.candidates[3].priority_target_achieved is False
+    assert return_batch.candidates[3].to_dict()["validation_status"] == "UNSAFE"
     assert emergency.exception_queue is not None
     assert emergency.exception_queue.top_exception_id == "EXCEPTION-PRIORITY-MIL-T01"
     assert emergency.revalidation == resolved.revalidation

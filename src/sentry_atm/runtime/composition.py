@@ -33,6 +33,7 @@ from sentry_atm.reference_data import POC_PERFORMANCE_PROFILES
 from sentry_atm.resolution import (
     DeterministicEmergencyReturnCandidateGenerator,
     DeterministicResolutionCandidateGenerator,
+    IsolatedEmergencyReturnSafetyValidator,
     IsolatedResolutionSafetyValidator,
 )
 from sentry_atm.risk import ConflictRiskEvaluator
@@ -110,6 +111,7 @@ class GoldenDemoRuntime:
     exception_queue_service: ExceptionQueueService
     candidate_generator: DeterministicResolutionCandidateGenerator
     emergency_return_candidate_generator: DeterministicEmergencyReturnCandidateGenerator
+    emergency_return_safety_validator: IsolatedEmergencyReturnSafetyValidator
     safety_validator: IsolatedResolutionSafetyValidator
     recommendation_service: DeterministicRecommendationRankingService
     recommendation_catalog: InMemoryRecommendationCatalog
@@ -170,6 +172,7 @@ def build_golden_demo_runtime() -> GoldenDemoRuntime:
         emergency_return_candidate_generator=(
             DeterministicEmergencyReturnCandidateGenerator()
         ),
+        emergency_return_safety_validator=IsolatedEmergencyReturnSafetyValidator(),
         safety_validator=IsolatedResolutionSafetyValidator(),
         recommendation_service=DeterministicRecommendationRankingService(),
         recommendation_catalog=recommendation_catalog,

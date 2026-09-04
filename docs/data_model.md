@@ -430,7 +430,19 @@ Phase 15-D의 `GoldenDemoValidatedModifiedManeuverApplicationResult`는 명시�
 Controller Decision Audit Aggregate를 덮어쓰지 않으며 현재 Run에만 존재하는 Application Evidence다.
 `GoldenDemoRevalidationReadModel`의 `application_source`가 기존 ACCEPT 적용과 수정안 적용을 구분한다.
 
-## 19. 의도적으로 제외한 모델
+## 19. Phase 18 Emergency Return
+
+`EmergencyReturnCandidateBatch`는 한 Emergency Priority Exception에서 생성한 복수 Aircraft Action과
+Arrival Sequence를 묶는다. 기존 `ResolutionCandidate`의 단일 Conflict·단일 Action 계약과 분리하며,
+생성만으로 Safety Verdict나 Runtime 적용을 뜻하지 않는다.
+
+`EmergencyReturnCandidateValidationResult`는 후보별 격리 Traffic에서 계산한 전체 Predicted Conflict,
+기준선 대비 새 Conflict, Performance 가능 여부, Emergency Sequence 위치, 안정 접근 보존 여부와
+Reason Code를 보존한다. `EmergencyReturnSafetyValidationRun`은 동일 UTC·Horizon·Profile의 기준선
+Conflict와 후보 결과를 Candidate ID 순서로 묶는다. 두 모델 모두 불변 계산 증거이며 Controller Decision,
+Recommendation 또는 적용된 Aircraft State를 포함하지 않는다.
+
+## 20. 의도적으로 제외한 모델
 
 다음은 현재 Phase의 책임이 아니므로 아직 구현하지 않는다.
 

@@ -20,6 +20,11 @@ from sentry_atm.domain.emergency_return import (
     EmergencyReturnManeuver,
     EmergencyReturnStrategy,
 )
+from sentry_atm.domain.emergency_return_validation import (
+    EmergencyReturnCandidateValidationResult,
+    EmergencyReturnSafetyValidationRun,
+    EmergencyReturnValidationReasonCode,
+)
 from sentry_atm.domain.enums import (
     AircraftCategory,
     ConflictStatus,
@@ -112,8 +117,11 @@ __all__ = [
     "EmergencyReturnAction",
     "EmergencyReturnCandidate",
     "EmergencyReturnCandidateBatch",
+    "EmergencyReturnCandidateValidationResult",
     "EmergencyReturnManeuver",
+    "EmergencyReturnSafetyValidationRun",
     "EmergencyReturnStrategy",
+    "EmergencyReturnValidationReasonCode",
     "EntryDelayManeuver",
     "ExceptionKind",
     "ExceptionQueueItem",

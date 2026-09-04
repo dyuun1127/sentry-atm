@@ -238,14 +238,24 @@ def run_golden_demo_regression(
             "emergency return candidates must contain ER-CAND-A through ER-CAND-D",
         )
         _require(
-            all(item.get("validation_status") == "NOT_VALIDATED" for item in return_candidates),
-            "generated emergency return candidates must remain unvalidated",
+            tuple(item.get("validation_status") for item in return_candidates)
+            == ("SAFE", "SAFE", "UNSAFE", "UNSAFE"),
+            "emergency return candidates must contain deterministic Safety verdicts",
+        )
+        _require(
+            all(not _list(item, "new_conflict_aircraft_ids") for item in return_candidates),
+            "isolated Emergency Return candidates must introduce no new Conflict",
+        )
+        _require(
+            return_batch.get("validation_profile_id")
+            == "POC_EMERGENCY_RETURN_SAFETY_V1",
+            "Emergency Return validation must expose its source-labelled profile",
         )
         checkpoints.append(
             _checkpoint(
                 "EMERGENCY",
                 emergency,
-                "MIL-T01 | priority 100 | queue rank 1 | 4 candidates",
+                "MIL-T01 | priority 100 | 2 safe / 2 unsafe | not applied",
             )
         )
 

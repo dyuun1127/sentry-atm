@@ -18,6 +18,7 @@ from sentry_atm.domain import (
     ConflictStatus,
     ControllerDecisionType,
     EmergencyReturnCandidateBatch,
+    EmergencyReturnSafetyValidationRun,
     EntryDelayManeuver,
     ExceptionStatus,
     HeadingManeuver,
@@ -320,7 +321,7 @@ class GoldenDemoEmergencyReturnActionReadModel:
 
 @dataclass(frozen=True, slots=True)
 class GoldenDemoEmergencyReturnCandidateReadModel:
-    """One coordinated alternative with no implied Safety verdict."""
+    """One coordinated alternative joined with isolated validation evidence."""
 
     candidate_id: str
     strategy: str
@@ -330,6 +331,14 @@ class GoldenDemoEmergencyReturnCandidateReadModel:
     estimated_delay_seconds: float
     operational_cost_score: float
     baseline: bool
+    verdict: str
+    predicted_conflict_aircraft_ids: tuple[tuple[str, str], ...]
+    new_conflict_aircraft_ids: tuple[tuple[str, str], ...]
+    performance_feasible: bool
+    emergency_sequence_position: int
+    priority_target_achieved: bool
+    stabilized_arrival_preserved: bool
+    reason_codes: tuple[str, ...]
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -341,7 +350,19 @@ class GoldenDemoEmergencyReturnCandidateReadModel:
             "estimated_delay_seconds": self.estimated_delay_seconds,
             "operational_cost_score": self.operational_cost_score,
             "baseline": self.baseline,
-            "validation_status": "NOT_VALIDATED",
+            "validation_status": self.verdict,
+            "verdict": self.verdict,
+            "predicted_conflict_aircraft_ids": [
+                list(item) for item in self.predicted_conflict_aircraft_ids
+            ],
+            "new_conflict_aircraft_ids": [
+                list(item) for item in self.new_conflict_aircraft_ids
+            ],
+            "performance_feasible": self.performance_feasible,
+            "emergency_sequence_position": self.emergency_sequence_position,
+            "priority_target_achieved": self.priority_target_achieved,
+            "stabilized_arrival_preserved": self.stabilized_arrival_preserved,
+            "reason_codes": list(self.reason_codes),
         }
 
 
@@ -355,6 +376,10 @@ class GoldenDemoEmergencyReturnBatchReadModel:
     emergency_aircraft_id: str
     generated_at_utc: str
     generator_profile_id: str
+    validation_run_id: str
+    validation_profile_id: str
+    validation_horizon_seconds: float
+    baseline_conflict_aircraft_ids: tuple[tuple[str, str], ...]
     candidates: tuple[GoldenDemoEmergencyReturnCandidateReadModel, ...]
 
     def to_dict(self) -> dict[str, object]:
@@ -365,6 +390,12 @@ class GoldenDemoEmergencyReturnBatchReadModel:
             "emergency_aircraft_id": self.emergency_aircraft_id,
             "generated_at_utc": self.generated_at_utc,
             "generator_profile_id": self.generator_profile_id,
+            "validation_run_id": self.validation_run_id,
+            "validation_profile_id": self.validation_profile_id,
+            "validation_horizon_seconds": self.validation_horizon_seconds,
+            "baseline_conflict_aircraft_ids": [
+                list(item) for item in self.baseline_conflict_aircraft_ids
+            ],
             "candidate_count": len(self.candidates),
             "candidates": [item.to_dict() for item in self.candidates],
         }
@@ -670,6 +701,15 @@ class InProcessGoldenDemoSessionApi:
             step_result=step_result,
             runtime=runtime,
         )
+        emergency_return_validation = (
+            runtime.emergency_return_safety_validator.validate(
+                emergency_return_batch,
+                step_result.traffic_snapshot.states,
+                _performance_by_aircraft(step_result=step_result, runtime=runtime),
+            )
+            if emergency_return_batch is not None
+            else None
+        )
         recommendation = runtime.recommendation_api.get_current()
         controller_decision = runtime.controller_decision_api.get_current()
         return GoldenDemoSessionReadModel(
@@ -712,8 +752,12 @@ class InProcessGoldenDemoSessionApi:
                 queue=queue,
             ),
             emergency_return_candidates=(
-                _map_emergency_return_batch(emergency_return_batch)
+                _map_emergency_return_batch(
+                    emergency_return_batch,
+                    emergency_return_validation,
+                )
                 if emergency_return_batch is not None
+                and emergency_return_validation is not None
                 else None
             ),
             candidate_comparisons=_map_candidate_comparisons(resolution_result),
@@ -926,26 +970,33 @@ def _build_emergency_return_candidates(*, step_result, runtime):
     )
     if exception is None:
         return None
+    return runtime.emergency_return_candidate_generator.generate(
+        exception,
+        step_result.traffic_snapshot.states,
+        _performance_by_aircraft(step_result=step_result, runtime=runtime),
+    )
+
+
+def _performance_by_aircraft(*, step_result, runtime):
     profile_by_id = {item.profile_id: item for item in runtime.performance_profiles}
     metadata_by_id = {
         item.aircraft_id: item.metadata for item in runtime.definition.aircraft
     }
-    performance_by_aircraft = {
+    return {
         state.aircraft_id: profile_by_id[
             metadata_by_id[state.aircraft_id].performance_class
         ]
         for state in step_result.traffic_snapshot.states
     }
-    return runtime.emergency_return_candidate_generator.generate(
-        exception,
-        step_result.traffic_snapshot.states,
-        performance_by_aircraft,
-    )
 
 
 def _map_emergency_return_batch(
     batch: EmergencyReturnCandidateBatch,
+    validation: EmergencyReturnSafetyValidationRun,
 ) -> GoldenDemoEmergencyReturnBatchReadModel:
+    validation_by_candidate = {
+        item.candidate_id: item for item in validation.results
+    }
     return GoldenDemoEmergencyReturnBatchReadModel(
         candidate_batch_id=batch.candidate_batch_id,
         source_exception_id=batch.source_exception_id,
@@ -953,6 +1004,12 @@ def _map_emergency_return_batch(
         emergency_aircraft_id=batch.emergency_aircraft_id,
         generated_at_utc=_utc_text(batch.generated_at_utc),
         generator_profile_id=batch.generator_profile_id,
+        validation_run_id=validation.validation_run_id,
+        validation_profile_id=validation.validation_profile_id,
+        validation_horizon_seconds=validation.horizon_seconds,
+        baseline_conflict_aircraft_ids=tuple(
+            item.pair.aircraft_ids for item in validation.baseline_conflicts
+        ),
         candidates=tuple(
             GoldenDemoEmergencyReturnCandidateReadModel(
                 candidate_id=candidate.candidate_id,
@@ -984,6 +1041,37 @@ def _map_emergency_return_batch(
                 estimated_delay_seconds=candidate.cost.estimated_delay_seconds,
                 operational_cost_score=candidate.cost.operational_cost_score,
                 baseline=candidate.is_baseline,
+                verdict=validation_by_candidate[candidate.candidate_id].verdict.value,
+                predicted_conflict_aircraft_ids=tuple(
+                    item.pair.aircraft_ids
+                    for item in validation_by_candidate[
+                        candidate.candidate_id
+                    ].predicted_conflicts_after
+                ),
+                new_conflict_aircraft_ids=tuple(
+                    item.pair.aircraft_ids
+                    for item in validation_by_candidate[
+                        candidate.candidate_id
+                    ].new_conflicts
+                ),
+                performance_feasible=validation_by_candidate[
+                    candidate.candidate_id
+                ].performance_feasible,
+                emergency_sequence_position=validation_by_candidate[
+                    candidate.candidate_id
+                ].emergency_sequence_position,
+                priority_target_achieved=validation_by_candidate[
+                    candidate.candidate_id
+                ].priority_target_achieved,
+                stabilized_arrival_preserved=validation_by_candidate[
+                    candidate.candidate_id
+                ].stabilized_arrival_preserved,
+                reason_codes=tuple(
+                    item.value
+                    for item in validation_by_candidate[
+                        candidate.candidate_id
+                    ].reason_codes
+                ),
             )
             for candidate in batch.candidates
         ),

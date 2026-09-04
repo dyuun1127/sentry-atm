@@ -452,6 +452,22 @@
 - Human-in-the-loop: 후보 생성은 Runtime, Queue, Audit 또는 실제 접근 순서를 변경하지 않는다.
 - 검증: 입력 순서 독립성, Stable ID, Performance 최저속도, Source Identity와 원 Traffic 불변 테스트
 
+### ASM-043 - 비상 복귀 격리 검증 기준
+
+- 상태: `PROVISIONAL`
+- 내용: Phase 18-C의 `POC_EMERGENCY_RETURN_SAFETY_V1`은 120초 Look-ahead에서 기준 Traffic에
+  없던 새 Conflict가 없고, 후보 Action이 Performance Gate를 통과하며, `MIL-T01`이 2번 이내이고,
+  이미 안정된 `CIV-A01`이 첫 순서를 유지할 때만 비상 복귀 후보를 `SAFE`로 판정한다.
+- 성능 Gate: Speed 변화는 현재값 대비 50 kt 이내이면서 Profile 속도 범위 안이어야 하고 Entry Delay는
+  60초 이하여야 한다. 이 값은 실제 항공기 운용 한계나 공식 절차가 아닌 PoC 입력이다.
+- Conflict 비회귀: T+240 기준선에 이미 존재하는 `CIV-A03 / MIL-F01` Conflict는 별도 Exception으로
+  관리한다. 후보가 같은 Conflict를 유지하는 것은 Validation Run에 남기되 새 Conflict 실패로 중복
+  계산하지 않는다. 따라서 후보 `SAFE`는 전체 Traffic에 Conflict가 없다는 뜻이 아니다.
+- 결과: Golden Demo에서는 A/B가 `SAFE`, C는 안정 접근 이동, D는 Priority 미달과 No-action으로
+  `UNSAFE`다. 안전 후보 간 추천 순위는 후속 Phase에서 결정한다.
+- Human-in-the-loop: 격리 검증은 어떤 Candidate Action도 Runtime에 적용하거나 승인하지 않는다.
+- 검증: 후보별 Traffic 복사, 전 Pair 재계산, 입력 순서 독립성, Gate Reason Code와 원 State 불변 테스트
+
 ## 5. Phase별 확정 시점
 
 | Phase | 반드시 확정할 Assumption |
@@ -469,7 +485,7 @@
 | Phase 11 | ASM-028, 033, 039 |
 | Phase 12 | ASM-011, 021, 030, 032, 040 |
 | Phase 13 | ASM-041 |
-| Phase 18 | ASM-042 |
+| Phase 18 | ASM-042, 043 |
 
 ## 6. 변경 규칙
 

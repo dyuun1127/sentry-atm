@@ -4,7 +4,8 @@
 
 Phase 18-A는 해결된 Golden Demo Run을 T+90에서 T+240으로 진행하고, 기존 Synthetic
 `EVT-MIL-T01-EMERGENCY`를 Session·Exception Queue·Web UI에 동일한 Checkpoint로 노출한다.
-Phase 18-B는 이 비상 증거에서 조정 후보를 생성한다. 관제사 결정·적용은 이 단계의 범위가 아니다.
+Phase 18-B는 이 비상 증거에서 조정 후보를 생성하고 Phase 18-C는 각 후보를 원 Traffic의 복사본에서
+격리 검증한다. 관제사 결정·적용은 이 단계의 범위가 아니다.
 
 ## 2. 결정론적 전환
 
@@ -60,5 +61,33 @@ Playback이 T+240 Cue에 도달하면 정확한 Frame에서 자동 정지한 뒤
 대상 Aircraft Performance Profile의 최소속도보다 낮아지지 않는다.
 
 Session의 `emergency_return_candidates`는 Source Exception/Priority Assessment ID, 생성 UTC,
-Generator Profile과 네 후보를 JSON Primitive로 제공한다. Web UI는 후보를 `NOT VALIDATED · NOT APPLIED`
-상태로만 표시한다. 후보 생성 조회는 Clock, Queue, Aircraft Runtime과 기존 Audit을 변경하지 않는다.
+Generator Profile과 네 후보를 JSON Primitive로 제공한다. 후보 생성 조회는 Clock, Queue, Aircraft
+Runtime과 기존 Audit을 변경하지 않는다.
+
+## 7. Phase 18-C 격리 Safety Validation
+
+`IsolatedEmergencyReturnSafetyValidator`는 각 후보마다 T+240 Traffic State Map을 새로 복사한다. Speed와
+Entry Delay만 복사본의 운동학적 State에 반영하고 Sequence Change는 논리 순서 증거로 평가한다. 검증 후
+원 Traffic, Clock, Queue, Candidate와 Aircraft Runtime은 모두 불변이다.
+
+`POC_EMERGENCY_RETURN_SAFETY_V1`의 잠정 Gate는 다음과 같다.
+
+- Look-ahead 120초에서 T+240 기준선에 없던 새로운 `PREDICTED` Conflict가 없어야 한다.
+- Speed 변화는 Performance 범위와 50 kt 이내, Entry Delay는 60초 이내여야 한다.
+- `MIL-T01`은 Arrival Sequence 2번 이내여야 한다.
+- 이미 안정된 `CIV-A01`은 첫 순서를 유지해야 한다.
+- No-action 기준선은 비교 증거이며 `SAFE`가 될 수 없다.
+
+기준선의 `CIV-A03 / MIL-F01` Conflict는 기존 Exception으로 계속 관리되므로 비상 후보가 새로 만든
+Conflict로 중복 판정하지 않는다. 대신 Validation Run에 `baseline_conflict_aircraft_ids`로 명시한다.
+이 비회귀 기준은 전체 Traffic이 Conflict-free라는 뜻이 아니다.
+
+| 후보 | 새 Conflict | 성능 | Priority/안정 접근 | Verdict |
+|---|---:|---|---|---|
+| `ER-CAND-A` | 0 | PASS | 2번 / 보존 | `SAFE` |
+| `ER-CAND-B` | 0 | PASS | 2번 / 보존 | `SAFE` |
+| `ER-CAND-C` | 0 | PASS | 1번 / `CIV-A01` 이동 | `UNSAFE` |
+| `ER-CAND-D` | 0 | PASS | 5번 / No-action | `UNSAFE` |
+
+Session과 Web UI는 120초 검증 Profile, 기준선 Conflict, 후보별 Verdict·Reason Code·Gate 증거를 표시한다.
+`SAFE`는 후속 추천 대상으로 사용할 수 있다는 의미일 뿐이며 `NOT APPLIED` 상태를 유지한다.
